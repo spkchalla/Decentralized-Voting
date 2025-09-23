@@ -2,8 +2,8 @@ import bcrypt from 'bcrypt';
 import argon2 from 'argon2';
 import crypto from 'crypto';
 
-const AES_ALGO = 'aes-256-cbc';
-const AES_IV_LENGTH = 16;
+const AES_ALGO = 'aes-256-gcm';
+const AES_IV_LENGTH = 12; // 96-bit IV is recommended for GCM
 
 const generateIV = () => crypto.randomBytes(AES_IV_LENGTH);
 
