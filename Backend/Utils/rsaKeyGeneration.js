@@ -1,6 +1,7 @@
-const {generateKeyPair} = require('crypto');
+//const {generateKeyPair} = require('crypto');
+import {generateKeyPair} from 'crypto';
 
-const generateRSAKeyPair = async() =>{
+export const generateRSAKeyPair = async() =>{
     try {
         return await new Promise((resolve, reject)=>{
             generateKeyPair(
@@ -31,5 +32,3 @@ const generateRSAKeyPair = async() =>{
         throw new Error('Unable to generate RSA Key pair');
     }
 };
-
-module.exports = {generateRSAKeyPair};
