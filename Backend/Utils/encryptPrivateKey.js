@@ -1,4 +1,3 @@
-import bcrypt from 'bcrypt';
 import argon2 from 'argon2';
 import crypto from 'crypto';
 
