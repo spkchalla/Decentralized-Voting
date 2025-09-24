@@ -1,21 +1,19 @@
 import express from "express";
 import { 
-  requestLoginOtp, 
-  loginWithOtp, 
-  resendLoginOtp, 
-  requestAdminSetupOtp,
-  verifyAdminSetupOtp,
+  login,
+  verifyLoginOtp,
   forgotPassword,
   resetPassword
 } from "../Controller/loginController.js";
 
 const LoginRouter = express.Router();
 
-LoginRouter.post("/request-otp", requestLoginOtp);
-LoginRouter.post("/verify-otp", loginWithOtp);
-LoginRouter.post("/resend-otp", resendLoginOtp);
-LoginRouter.post("/admin/request-setup-otp", requestAdminSetupOtp);
-LoginRouter.post("/admin/verify-setup-otp", verifyAdminSetupOtp);
+LoginRouter.post("/",login);
+LoginRouter.post("/login-otp",verifyLoginOtp);
+LoginRouter.post("/forgot-password", forgotPassword); // For resend also use the same one
+LoginRouter.post("/reset-password", resetPassword);
+
+
 
 
 export default LoginRouter;
