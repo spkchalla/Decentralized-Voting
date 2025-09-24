@@ -127,3 +127,21 @@ export const deleteParty = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const activateParty = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const party = await Party.findById(id);
+    if (!party) {
+      return res.status(404).json({ message: "Party not found" });
+    }
+
+    party.status = 1;
+    await party.save();
+
+    res.status(200).json({ message: "Party Activated successfully" });
+  } catch (err) {
+    console.error("Error deleting party:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

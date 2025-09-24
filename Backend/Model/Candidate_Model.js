@@ -21,6 +21,10 @@ const candidateSchema = new Schema({
     party: {
         type: mongoose.Schema.ObjectId,
         ref: "Party"
+    },
+    status: {
+        type: Number,
+        default: 1 // Default to active
     }
 }, { timestamps: true });
 
