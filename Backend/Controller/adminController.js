@@ -123,3 +123,28 @@ export const setupAdminPassword = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const getAdminId = async (req, res) => { 
+    try {
+        const { id } = req.params;
+        const admin = await Admin.findById(id).select("-otp");
+        
+        if (!admin) {
+            return res.status(404).json({ message: "Admin not found" });
+        }
+
+        // Convert Mongoose doc to plain object
+        const adminObj = admin.toObject();
+
+        // Rename emailId → email
+        if (adminObj.emailId) {
+            adminObj.email = adminObj.emailId;
+            delete adminObj.emailId; // remove old key if you don’t want both
+        }
+
+        res.status(200).json(adminObj);
+    } catch (error) {
+        console.error("Fetch admin error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
