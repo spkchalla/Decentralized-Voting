@@ -12,10 +12,11 @@ export const deriveAESKey = async (password, salt = null) => {
         salt = crypto.randomBytes(16);
     }
     // Use argon2id to derive a raw 32-byte key
-    const key = await argon2.hashRaw(password, {
+    const key = await argon2.hash(password, {
         type: argon2.argon2id,
         salt,
         hashLength: 32,
+        raw: true,
     });
     return { key, salt };
 };
