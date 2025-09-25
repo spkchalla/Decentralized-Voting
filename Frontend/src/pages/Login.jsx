@@ -1,37 +1,125 @@
-import React, { useContext, useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { assets } from '../assets/assets';
 import { useNavigate } from 'react-router-dom';
-import { AppContent } from '../context/AppContext';
 import { toast } from 'react-toastify';
+import axios from 'axios';
+import { AuthContext } from '../context/AppContext';
+import * as jwtDecode from 'jwt-decode'; // Added import for JWT decoding
 
 const Login = () => {
   const navigate = useNavigate();
-  const { setIsLoggedin, getUserData } = useContext(AppContent);
+  const { login } = useContext(AuthContext); // Access login function
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
   const [state, setState] = useState('Login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSubmitHandler = (e) => {
+  const onSubmitHandler = async (e) => {
     e.preventDefault();
-    if (state === 'Sign up') {
-      toast.success('Registration successful! Please verify OTP.');
-      navigate('/otp-verification', { state: { purpose: 'verification', email } });
-    } else {
-      toast.success('Please verify OTP to login.');
-      navigate('/otp-verification', { state: { purpose: 'verification', email } });
+
+    // Basic client-side validation
+    if (!email || !password) {
+      toast.error('Email and password are required.');
+      return;
+    }
+    if (state === 'Sign up' && !name) {
+      toast.error('Full name is required for sign up.');
+      return;
+    }
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      axios.defaults.withCredentials = true;
+      if (state === 'Sign up') {
+        const response = await axios.post(`${backendUrl}/user/register`, {
+          name,
+          email,
+          password,
+        });
+        const { data, status } = response;
+        console.log('Registration response:', { status, data });
+
+        if (status === 201 || data.success || data.message === 'User registered, OTP sent' || data.message === 'OTP sent to email') {
+          const userId = data.userId || data.user_id || data.id || data._id;
+          if (!userId) {
+            console.error('userId not found in response data:', data);
+            toast.error('Registration successful, but user ID missing.');
+            return;
+          }
+          toast.success('Registration successful! Please verify OTP.');
+          navigate('/otp-verification', {
+            state: { purpose: 'verification', email, source: 'register', userId },
+          });
+        } else {
+          toast.error(data.message || 'Registration failed.');
+        }
+      } else {
+        const response = await axios.post(`${backendUrl}/login/`, {
+          email,
+          password,
+        });
+        const { data, status } = response;
+        console.log('Login response:', { status, data });
+        if (data.token) {
+          console.log('JWT token received:', data.token); // Log the token
+          const decoded = jwtDecode.default(data.token); // Decode token
+          console.log('Decoded JWT:', decoded); // Log decoded contents
+        }
+        if (status === 200 && (data.message === 'OTP sent to email' || data.message === 'User registered, OTP sent')) {
+          toast.success('Please verify OTP to login.');
+          navigate('/otp-verification', { state: { purpose: 'verification', email, source: 'login' } });
+        } else if (status === 200 && (data.message === 'Login successful' || data.success)) {
+          if (data.token) {
+            login(data.token); // Store JWT and update auth context
+            toast.success('Login successful!');
+            navigate('/');
+          } else {
+            toast.error('Login successful, but no token received.');
+          }
+        } else {
+          toast.error(data.message || 'Login failed.');
+        }
+      }
+    } catch (error) {
+      console.error('Error during submission:', error.response?.data, error.response?.status);
+      toast.error(error.response?.data?.message || 'An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     if (!email) {
       toast.error('Please enter your email address.');
       return;
     }
-    toast.success('OTP sent to your email.');
-    navigate('/otp-verification', { state: { purpose: 'reset', email } });
+    try {
+      axios.defaults.withCredentials = true;
+      const response = await axios.post(`${backendUrl}/login/forgot-password`, { email });
+      const { data, status } = response;
+      console.log('Forgot password response:', { status, data });
+      if (status === 200 || data.success || data.message === 'OTP sent to email' || data.message === 'User registered, OTP sent') {
+        toast.success('OTP sent to your email.');
+        navigate('/otp-verification', { state: { purpose: 'reset', email, source: 'forgot-password' } });
+      } else {
+        toast.error(data.message || 'Failed to send OTP.');
+      }
+    } catch (error) {
+      console.error('Error during forgot password:', error.response?.data, error.response?.status);
+      toast.error(error.response?.data?.message || 'Failed to send OTP. Please try again.');
+    }
   };
+
+  const buttonClasses = isSubmitting
+    ? 'w-full py-2.5 rounded-full bg-gray-400 opacity-70 cursor-not-allowed text-white font-medium'
+    : 'w-full py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white font-medium cursor-pointer transition-transform duration-200 hover:scale-105 hover:bg-gradient-to-r hover:from-indigo-400 hover:to-indigo-800 hover:shadow-lg';
 
   return (
     <div className="flex items-center justify-center min-h-screen px-6 sm:px-0">
@@ -89,7 +177,7 @@ const Login = () => {
           {state === 'Login' && (
             <p
               onClick={handleForgotPassword}
-              className="mb-4 text-indigo-500 cursor-pointer"
+              className="mb-4 text-indigo-500 cursor-pointer hover:text-indigo-400"
             >
               Forgot Password?
             </p>
@@ -97,9 +185,10 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white font-medium cursor-pointer"
+            disabled={isSubmitting}
+            className={buttonClasses}
           >
-            {state === 'Sign up' ? 'Sign Up' : 'Login'}
+            {isSubmitting ? 'Requesting OTP' : state === 'Sign up' ? 'Sign Up' : 'Login'}
           </button>
         </form>
 

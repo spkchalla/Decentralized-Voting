@@ -1,49 +1,58 @@
-import axios from "axios";
-import { createContext, useEffect, useState } from "react";
-import { toast } from "react-toastify";
+import React, { createContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import * as jwtDecode from 'jwt-decode';
 
-export const AppContent=createContext()
-export const AppContextProvider=(props)=>{
-    const backendUrl=import.meta.env.VITE_BACKEND_URL
-    const [isLoggedin, setIsLoggedin]=useState(false)
-    const [userData, setUserData]=useState(false)
+export const AuthContext = createContext();
 
-    const getAuthState=async()=>{
-        try {
-            const {data}=await axios.get(backendUrl+'/api/auth/is-auth')
-            if(data.success){
-                setIsLoggedin(true)
-                getUserData()
-            }
-        } 
-        catch (error) {
-            toast.error(error.message)    
-        }
+export const AuthProvider = ({ children }) => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Initialize auth state from localStorage
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    console.log('AuthProvider: Checking for stored token on init:', token ? 'Token found' : 'No token found');
+    if (token) {
+      try {
+        const decoded = jwtDecode.default(token);
+        console.log('AuthProvider: Decoded token on init:', decoded);
+        console.log('AuthProvider: User name on init:', decoded.name || 'No name in token');
+        setUser(decoded); // Store user details from JWT
+      } catch (error) {
+        console.error('AuthProvider: Error decoding token on init:', error);
+        localStorage.removeItem('token');
+      }
     }
+    setLoading(false);
+  }, []);
 
-    const getUserData=async()=>{
-        try {
-            const {data}=await axios.get(backendUrl+'/api/user/data')    
-            data.success ? setUserData(data.userData) : toast.error(data.message)
-        } 
-        catch (error) {
-            toast.error(error.message)
-        }
+  // Login function to store token and decode user details
+  const login = (token) => {
+    console.log('AuthProvider: Login function called with token:', token);
+    localStorage.setItem('token', token);
+    try {
+      const decoded = jwtDecode.default(token);
+      console.log('AuthProvider: Decoded token in login:', decoded);
+      console.log('AuthProvider: Logged in user name:', decoded.name || 'No name in token');
+      setUser(decoded);
+    } catch (error) {
+      console.error('AuthProvider: Error decoding token in login:', error);
+      localStorage.removeItem('token');
     }
+  };
 
-    useEffect(()=>{
-        getAuthState();
-    },[])
+  // Logout function
+  const logout = () => {
+    console.log('AuthProvider: Logging out user');
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/login');
+  };
 
-    const value={
-        backendUrl,
-        isLoggedin, setIsLoggedin,
-        userData, setUserData,
-        getUserData
-    }
-    return(
-        <AppContent.Provider value={value}>
-            {props.children}
-        </AppContent.Provider>
-    )
-}
+  return (
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

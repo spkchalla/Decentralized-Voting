@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../Model/User_Model.js";
 import Admin from "../Model/Admin_Model.js";
-import { sendOtpToEmail, verifyOTP } from "../Utils/OTP.js";
+import { sendOtpToEmail, verifyOTP , checkOtp} from "../Utils/OTP.js";
 
 export const login = async (req, res) => {
   try {
@@ -188,6 +188,33 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+export const verifyForgotOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await Admin.findOne({ emailId: email });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      user.email = user.emailId; // normalize
+    }
+
+    const isValid = await checkOtp(user, otp); // ✅ use helper
+
+    if (isValid) {
+      return res.status(200).json({ message: "OTP is valid" });
+    } else {
+      return res.status(400).json({ message: "OTP incorrect" });
+    }
+  } catch (err) {
+    return res.status(400).json({ message: err.message || "OTP verification failed" });
+  }
+};
+
+
 export const editProfile = async (req, res) => {
   try {
     const { name, email } = req.body;
@@ -243,5 +270,42 @@ export const editProfile = async (req, res) => {
   } catch (error) {
     console.error("Edit profile error:", error);
     res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+
+const findUserByEmail = async (email) => {
+  let user = await User.findOne({ email });
+  if (!user) {
+    user = await Admin.findOne({ emailId: email });
+    if (user) user.email = user.emailId; // temporary normalization
+  }
+  return user;
+};
+
+export const resendOtpController = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await findUserByEmail(email);
+    if (!user) {
+      // Generic message to avoid email enumeration
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isVerified) {
+      return res.status(409).json({ message: "User is already verified" }); // 409 = conflict
+    }
+
+    await sendOtpToEmail(user);
+
+    return res.status(200).json({ message: "OTP resent successfully" });
+  } catch (error) {
+    console.error("Resend OTP Error:", error);
+    return res.status(500).json({ message: "Something went wrong", error: error.message });
   }
 };
