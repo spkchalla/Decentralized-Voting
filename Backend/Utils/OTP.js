@@ -52,3 +52,21 @@ export const verifyOTP = async (user, OTP) => {
     user.otp = undefined;
     await user.save();
 };
+
+// helper function to check OTP without deleting it
+export const checkOtp = async (user, otp) => {
+  if (!user.otp || !user.otp.code) {
+    throw new Error("No OTP pending for this user");
+  }
+
+  if (new Date() > new Date(user.otp.expiresAt)) {
+    throw new Error("OTP expired");
+  }
+
+  const isMatch = await bcrypt.compare(otp, user.otp.code);
+  if (!isMatch) {
+    return false; // OTP incorrect
+  }
+
+  return true; // OTP correct
+};

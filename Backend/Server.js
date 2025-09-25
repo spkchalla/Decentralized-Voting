@@ -10,7 +10,10 @@ import CandidateRouter from "./Route/Candidate_Routes.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+    origin: "http://localhost:5173",  // allow only your frontend
+    credentials: true,                // allow cookies / auth headers
+}));
 app.use(express.json());
 
 connectDB();
