@@ -187,3 +187,61 @@ export const resetPassword = async (req, res) => {
     res.status(400).json({ message: error.message || "Failed to reset password" });
   }
 };
+
+export const editProfile = async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    // Validate input
+    if (!name) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+
+    let entity;
+    let userType = "user";
+
+    // Check if the request is from a user or admin using middleware data
+    if (req.user) {
+      entity = await User.findOne({ _id: req.user._id, email: req.user.email });
+      if (!entity) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      // Ensure email matches the logged-in user's email
+      if (email && email !== entity.email) {
+        return res.status(401).json({ message: "Not authorized" });
+      }
+    } else if (req.admin) {
+      entity = await Admin.findById(req.admin._id);
+      if (!entity) {
+        return res.status(404).json({ message: "Admin not found" });
+      }
+      userType = "admin";
+      // Ensure email matches the logged-in admin's email
+      if (email && email !== entity.emailId) {
+        return res.status(401).json({ message: "Not authorized" });
+      }
+    } else {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
+    // Only allow updating name
+    entity.name = name;
+    await entity.save();
+
+    // Return updated profile
+    const updatedProfile = {
+      _id: entity._id,
+      name: entity.name,
+      email: userType === "user" ? entity.email : entity.emailId,
+      userType
+    };
+
+    res.status(200).json({
+      message: "Name updated successfully",
+      profile: updatedProfile
+    });
+  } catch (error) {
+    console.error("Edit profile error:", error);
+    res.status(500).json({ message: error.message || "Server error" });
+  }
+};
