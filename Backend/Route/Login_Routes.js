@@ -1,21 +1,25 @@
 import express from "express";
 import { 
-  requestLoginOtp, 
-  loginWithOtp, 
-  resendLoginOtp, 
-  requestAdminSetupOtp,
-  verifyAdminSetupOtp,
+  login,
+  verifyLoginOtp,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  editProfile
 } from "../Controller/loginController.js";
+
+import { protectAdmin } from "../Middleware/authContextAdmin.js";
+import { protect } from "../Middleware/authContext.js";
+import { allowUserOrAdmin, protectEither } from "../Middleware/authContextEither.js";
 
 const LoginRouter = express.Router();
 
-LoginRouter.post("/request-otp", requestLoginOtp);
-LoginRouter.post("/verify-otp", loginWithOtp);
-LoginRouter.post("/resend-otp", resendLoginOtp);
-LoginRouter.post("/admin/request-setup-otp", requestAdminSetupOtp);
-LoginRouter.post("/admin/verify-setup-otp", verifyAdminSetupOtp);
+LoginRouter.post("/",login);
+LoginRouter.post("/login-otp",verifyLoginOtp);
+LoginRouter.post("/forgot-password", forgotPassword); // For resend also use the same one
+LoginRouter.post("/reset-password", resetPassword);
+LoginRouter.put("/editname", protectEither, editProfile);
+
+
 
 
 export default LoginRouter;
