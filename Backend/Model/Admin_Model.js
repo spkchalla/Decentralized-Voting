@@ -17,7 +17,19 @@ const adminSchema = new Schema({
     history: [{
         type: mongoose.Schema.ObjectId,
         ref: "Election"
-    }]
+    }],
+    password:{
+        type:String
+    },
+    emailId:{
+        type:String,
+        required:true,
+        unique:true
+    },
+        otp: {
+        code: { type: String },
+        expiresAt: { type: Date }
+    },
 }, { timestamps: true });
 
 const Admin = mongoose.models.Admin || mongoose.model("Admin", adminSchema);

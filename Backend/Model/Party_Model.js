@@ -12,8 +12,11 @@ const partySchema = new Schema({
         unique: true
     },
     symbol: {
-        type: String, // store file path or URL from Multer
-        required: true
+        type: String,
+    },
+    status:{
+        type:Number,
+        default:1
     }
 }, { timestamps: true });
 
