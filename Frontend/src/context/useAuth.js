@@ -58,6 +58,7 @@ const useAuth = () => {
             name: userData.name,
             email: userData.email,
             voterId: userType === 'admin' ? undefined : userData.voterId,
+            status: userType === 'admin' ? undefined : userData.status,
             userType: userType || 'N/A',
           });
           setIsAuthenticated(true);

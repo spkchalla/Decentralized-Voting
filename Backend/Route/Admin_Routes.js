@@ -7,6 +7,6 @@ const AdminRoute = express.Router();
 
 AdminRoute.post("/addu", addAdmin);
 AdminRoute.post("/add",protectAdmin, addAdmin);
-AdminRoute.get("/get/:id",getAdminId); 
+AdminRoute.get("/get/:id",protectAdmin,getAdminId); 
 
 export default AdminRoute;

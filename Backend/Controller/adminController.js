@@ -127,7 +127,7 @@ export const setupAdminPassword = async (req, res) => {
 export const getAdminId = async (req, res) => { 
     try {
         const { id } = req.params;
-        const admin = await Admin.findById(id).select("-otp");
+        const admin = await Admin.findById(id).select("-otp -password");
         
         if (!admin) {
             return res.status(404).json({ message: "Admin not found" });

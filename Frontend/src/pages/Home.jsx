@@ -30,6 +30,7 @@ const Home = () => {
             <p>Name: {user.name || 'Loading...'}</p>
             <p>Email: {user.email || 'Loading...'}</p>
             {user.userType !== 'admin' && <p>Voter ID: {user.voterId || 'Loading...'}</p>}
+            {user.userType !== 'admin' && <p>Status: {user.status || 'Loading...'}</p>}
             <p>User Type: {user.userType}</p>
             <p>Issued At: {new Date(user.iat * 1000).toLocaleString()}</p>
             <p>Expires At: {new Date(user.exp * 1000).toLocaleString()}</p>
