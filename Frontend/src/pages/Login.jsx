@@ -8,6 +8,7 @@ import * as jwtDecode from 'jwt-decode';
 import { AuthContext } from '../context/AppContext';
 import Header from '../components/Header1'; 
 
+
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useContext(AuthContext);
@@ -17,7 +18,9 @@ const Login = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pincode, setPincode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modal, setModal] = useState({ isOpen: false, message: '' });
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
@@ -25,9 +28,15 @@ const Login = () => {
       toast.error('Email and password are required.');
       return;
     }
-    if (state === 'Sign up' && !name) {
-      toast.error('Full name is required for sign up.');
-      return;
+    if (state === 'Sign up') {
+      if (!name) {
+        toast.error('Full name is required for sign up.');
+        return;
+      }
+      if (!pincode || !/^\d{6}$/.test(pincode)) {
+        toast.error('A valid 6-digit pincode is required for sign up.');
+        return;
+      }
     }
     if (password.length < 6) {
       toast.error('Password must be at least 6 characters long.');
@@ -38,13 +47,19 @@ const Login = () => {
     try {
       axios.defaults.withCredentials = true;
       if (state === 'Sign up') {
-        const response = await axios.post(`${backendUrl}/user/register`, { name, email, password });
+        const response = await axios.post(`${backendUrl}/approval/register`, {
+          name,
+          email,
+          password,
+          pincode: Number(pincode),
+        });
         const { data, status } = response;
-        if (status === 201 || data.success || data.message?.includes('OTP sent')) {
-          const userId = data.userId || data.user_id || data.id || data._id;
+        console.log('Registration response:', { status, data });
+
+        if (status === 201) {
           toast.success('Registration successful! Please verify OTP.');
           navigate('/otp-verification', {
-            state: { purpose: 'verification', email, source: 'register', userId },
+            state: { purpose: 'verification', email, source: 'register' },
           });
         } else {
           toast.error(data.message || 'Registration failed.');
@@ -53,6 +68,7 @@ const Login = () => {
         const response = await axios.post(`${backendUrl}/login/`, { email, password });
         const { data, status } = response;
         if (data.token) {
+          console.log('JWT token received:', data.token);
           const decoded = jwtDecode.default(data.token);
           console.log('Decoded JWT:', decoded);
         }
@@ -73,7 +89,11 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Error during submission:', error.response?.data, error.response?.status);
-      toast.error(error.response?.data?.message || 'An error occurred. Please try again.');
+      if (error.response?.status === 403) {
+        setModal({ isOpen: true, message: error.response.data.message });
+      } else {
+        toast.error(error.response?.data?.message || 'An error occurred. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -88,7 +108,8 @@ const Login = () => {
       axios.defaults.withCredentials = true;
       const response = await axios.post(`${backendUrl}/login/forgot-password`, { email });
       const { data, status } = response;
-      if (status === 200 || data.success || data.message?.includes('OTP sent')) {
+      console.log('Forgot password response:', { status, data });
+      if (status === 200 || data.success || data.message === 'OTP sent to email') {
         toast.success('OTP sent to your email.');
         navigate('/otp-verification', { state: { purpose: 'reset', email, source: 'forgot-password' } });
       } else {
@@ -98,6 +119,10 @@ const Login = () => {
       console.error('Error during forgot password:', error.response?.data, error.response?.status);
       toast.error(error.response?.data?.message || 'Failed to send OTP. Please try again.');
     }
+  };
+
+  const closeModal = () => {
+    setModal({ isOpen: false, message: '' });
   };
 
   const buttonClasses = isSubmitting
@@ -118,8 +143,9 @@ const Login = () => {
             {state === 'Sign up' ? 'Create your account' : 'Login to your account!'}
           </p>
 
-          <form onSubmit={onSubmitHandler}>
-            {state === 'Sign up' && (
+        <form onSubmit={onSubmitHandler}>
+          {state === 'Sign up' && (
+            <>
               <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
                 <img src={assets.person_icon} alt="" />
                 <input
@@ -131,29 +157,43 @@ const Login = () => {
                   required
                 />
               </div>
-            )}
-            <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-              <img src={assets.mail_icon} alt="" />
-              <input
-                onChange={(e) => setEmail(e.target.value)}
-                value={email}
-                className="bg-transparent outline-none"
-                type="email"
-                placeholder="Email Id"
-                required
-              />
-            </div>
-            <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-              <img src={assets.lock_icon} alt="" />
-              <input
-                onChange={(e) => setPassword(e.target.value)}
-                value={password}
-                className="bg-transparent outline-none"
-                type="password"
-                placeholder="Password"
-                required
-              />
-            </div>
+              <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+                <img src={assets.map_icon} alt="" />
+                <input
+                  onChange={(e) => setPincode(e.target.value)}
+                  value={pincode}
+                  className="bg-transparent outline-none"
+                  type="text"
+                  placeholder="6-digit Pincode"
+                  required
+                  pattern="\d{6}"
+                  title="Pincode must be a 6-digit number"
+                />
+              </div>
+            </>
+          )}
+          <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+            <img src={assets.mail_icon} alt="" />
+            <input
+              onChange={(e) => setEmail(e.target.value)}
+              value={email}
+              className="bg-transparent outline-none"
+              type="email"
+              placeholder="Email Id"
+              required
+            />
+          </div>
+          <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+            <img src={assets.lock_icon} alt="" />
+            <input
+              onChange={(e) => setPassword(e.target.value)}
+              value={password}
+              className="bg-transparent outline-none"
+              type="password"
+              placeholder="Password"
+              required
+            />
+          </div>
 
             {state === 'Login' && (
               <p
@@ -186,6 +226,22 @@ const Login = () => {
           )}
         </div>
       </div>
+
+      {/* Modal for 403 responses */}
+      {modal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 p-6 rounded-lg shadow-lg w-full sm:w-96 text-indigo-300 text-sm">
+            <h3 className="text-xl font-semibold text-white mb-4">Account Status</h3>
+            <p className="text-center mb-6">{modal.message}</p>
+            <button
+              onClick={closeModal}
+              className="w-full py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white font-medium cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

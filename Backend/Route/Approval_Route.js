@@ -1,14 +1,16 @@
 import express from "express";
-import { getPendingUsers, approveUser, rejectUser, updateUserDetails , verifyUserOtp} from "../Controller/approvalController.js";
+import { registerUser, verifyUserOtp, getPendingUsers, approveUser, rejectUser, updateUserDetails, resendOtp } from "../Controller/approvalController.js";
 import { protectAdmin } from "../Middleware/authContextAdmin.js";
 
 const ApprovalRouter = express.Router();
 
 // Admin routes
-ApprovalRouter.get("/pending", protectAdmin, getPendingUsers);
-ApprovalRouter.put("/approve/:id", protectAdmin, approveUser);
-ApprovalRouter.delete("/reject/:id", protectAdmin, rejectUser);
-ApprovalRouter.put("/update/:id", protectAdmin, updateUserDetails);
+ApprovalRouter.post("/register", registerUser);
 ApprovalRouter.post("/verify-otp", verifyUserOtp);
+ApprovalRouter.get("/pending", getPendingUsers); // Add auth middleware here if needed
+ApprovalRouter.put("/approve/:id", approveUser);
+ApprovalRouter.delete("/reject/:id", rejectUser);
+ApprovalRouter.put("/:id", updateUserDetails);
+ApprovalRouter.post("/resend", resendOtp);
 
 export default ApprovalRouter;

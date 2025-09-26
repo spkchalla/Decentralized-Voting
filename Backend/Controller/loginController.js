@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../Model/User_Model.js";
 import Admin from "../Model/Admin_Model.js";
 import { sendOtpToEmail, verifyOTP , checkOtp} from "../Utils/OTP.js";
+import Approval from "../Model/Approved_Model.js";
 
 export const login = async (req, res) => {
   try {
@@ -11,6 +12,17 @@ export const login = async (req, res) => {
     // Validate input
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Check if email exists in Approval model
+    const approval = await Approval.findOne({ email });
+    if (approval) {
+      if (approval.status === "Pending") {
+        return res.status(403).json({ message: "Please wait until admin approves." });
+      }
+      if (approval.status === "Rejected") {
+        return res.status(403).json({ message: "Your account has been rejected. Please check your email for the reason." });
+      }
     }
 
     // Check if email exists in User or Admin collection
@@ -50,6 +62,7 @@ export const login = async (req, res) => {
     res.status(500).json({ message: error.message || "Server error" });
   }
 };
+
 
 export const verifyLoginOtp = async (req, res) => {
   try {
