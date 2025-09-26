@@ -106,16 +106,27 @@ export const updateElection = async(req, res) =>{
 
         if (title) election.title = title;
         if (description) election.description = description;
-        if (startDateTime) election.startDateTime = startDateTime;
-        if (endDateTime) election.endDateTime = endDateTime;
-        if (users) election.users = users;
+
+        // Recompute and validate the new start/end dates before assignment
+        const nextStartDateTime = startDateTime ?? election.startDateTime;
+        const nextEndDateTime   = endDateTime   ?? election.endDateTime;
+
+        if (new Date(nextStartDateTime) >= new Date(nextEndDateTime)) {
+            return res.status(400).json({ message: "Invalid Dates for Election" });
+        }
+
+        election.startDateTime = nextStartDateTime;
+        election.endDateTime   = nextEndDateTime;
+
+        if (users)      election.users      = users;
         if (candidates) election.candidates = candidates.map(candidate => ({ candidate, votesCount: 0 }));
-        if (officers) election.officers = officers;
+        if (officers)   election.officers   = officers;
 
 
         const now = new Date();
-        election.status = now < new Date(election.startDateTime) ? "Not Yet Started" :
-                      now > new Date(election.endDateTime) ? "Finished" : "Active";
+        election.status = now < new Date(election.startDateTime)   ? "Not Yet Started"
+                         : now > new Date(election.endDateTime) ? "Finished"
+                                                                 : "Active";
 
         await election.save();
         res.status(200).json({message: "Election updated Successfully", election});
