@@ -1,13 +1,12 @@
-// File: src/pages/Login.jsx
 import React, { useState, useContext } from 'react';
+import { FaMapPin } from 'react-icons/fa';
 import { assets } from '../assets/assets';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import * as jwtDecode from 'jwt-decode';
 import { AuthContext } from '../context/AppContext';
-import Header from '../components/Header1'; 
-
+import Header from '../components/Header1';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -143,57 +142,57 @@ const Login = () => {
             {state === 'Sign up' ? 'Create your account' : 'Login to your account!'}
           </p>
 
-        <form onSubmit={onSubmitHandler}>
-          {state === 'Sign up' && (
-            <>
-              <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-                <img src={assets.person_icon} alt="" />
-                <input
-                  onChange={(e) => setName(e.target.value)}
-                  value={name}
-                  className="bg-transparent outline-none"
-                  type="text"
-                  placeholder="Full Name"
-                  required
-                />
-              </div>
-              <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-                <img src={assets.map_icon} alt="" />
-                <input
-                  onChange={(e) => setPincode(e.target.value)}
-                  value={pincode}
-                  className="bg-transparent outline-none"
-                  type="text"
-                  placeholder="6-digit Pincode"
-                  required
-                  pattern="\d{6}"
-                  title="Pincode must be a 6-digit number"
-                />
-              </div>
-            </>
-          )}
-          <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-            <img src={assets.mail_icon} alt="" />
-            <input
-              onChange={(e) => setEmail(e.target.value)}
-              value={email}
-              className="bg-transparent outline-none"
-              type="email"
-              placeholder="Email Id"
-              required
-            />
-          </div>
-          <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
-            <img src={assets.lock_icon} alt="" />
-            <input
-              onChange={(e) => setPassword(e.target.value)}
-              value={password}
-              className="bg-transparent outline-none"
-              type="password"
-              placeholder="Password"
-              required
-            />
-          </div>
+          <form onSubmit={onSubmitHandler}>
+            {state === 'Sign up' && (
+              <>
+                <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+                  <img src={assets.person_icon} alt="" />
+                  <input
+                    onChange={(e) => setName(e.target.value)}
+                    value={name}
+                    className="bg-transparent outline-none"
+                    type="text"
+                    placeholder="Full Name"
+                    required
+                  />
+                </div>
+                <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+                  <FaMapPin className="text-white" aria-hidden="true" />
+                  <input
+                    onChange={(e) => setPincode(e.target.value)}
+                    value={pincode}
+                    className="bg-transparent outline-none"
+                    type="text"
+                    placeholder="6-digit Pincode"
+                    required
+                    pattern="\d{6}"
+                    title="Pincode must be a 6-digit number"
+                  />
+                </div>
+              </>
+            )}
+            <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+              <img src={assets.mail_icon} alt="" />
+              <input
+                onChange={(e) => setEmail(e.target.value)}
+                value={email}
+                className="bg-transparent outline-none"
+                type="email"
+                placeholder="Email Id"
+                required
+              />
+            </div>
+            <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+              <img src={assets.lock_icon} alt="" />
+              <input
+                onChange={(e) => setPassword(e.target.value)}
+                value={password}
+                className="bg-transparent outline-none"
+                type="password"
+                placeholder="Password"
+                required
+              />
+            </div>
 
             {state === 'Login' && (
               <p
