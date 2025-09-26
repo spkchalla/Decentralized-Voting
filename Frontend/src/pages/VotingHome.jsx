@@ -4,8 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import * as jwtDecode from 'jwt-decode'; // FIXED import for Vite ESM
-import Header from '../components/Header1';
+import jwtDecode from 'jwt-decode'; // Correct import
+import Header from '../components/Header1'; // Shared header
 
 const Otp = () => {
   const navigate = useNavigate();
@@ -70,11 +70,12 @@ const Otp = () => {
       const { data } = response;
 
       if (data.token) {
+        // Save token in cookies
         Cookies.set('token', data.token, cookieOptions);
         Cookies.set('userType', data.userType, cookieOptions);
 
-        // DECODE TOKEN
-        const decoded = jwtDecode(data.token); // Works with the fixed import
+        // Decode token
+        const decoded = jwtDecode(data.token);
         console.log('Decoded JWT:', decoded);
       }
 
@@ -112,6 +113,7 @@ const Otp = () => {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Header /> {/* Shared header */}
+
       <div className="flex flex-1 items-center justify-center px-6 sm:px-0 mt-24">
         <div className="bg-slate-900 p-10 rounded-lg shadow-lg w-full sm:w-96 text-indigo-300 text-sm">
           <h2 className="text-3xl font-semibold text-white text-center mb-3">{title}</h2>
