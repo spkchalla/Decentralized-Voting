@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import Cookies from 'js-cookie'; // Add this import
 
 const Otp = () => {
   const navigate = useNavigate();
@@ -21,6 +22,13 @@ const Otp = () => {
   const [subtitle, setSubtitle] = useState(`Enter the 6-digit code sent to ${email || 'your email'}.`);
   const [buttonText, setButtonText] = useState('Verify OTP');
   const [sourceLabel, setSourceLabel] = useState('');
+
+  // Cookie options for consistency with useAuth
+  const cookieOptions = {
+    secure: process.env.NODE_ENV === 'production', // HTTPS in production
+    sameSite: 'strict',
+    expires: 7, // 7 days, adjust based on token expiry
+  };
 
   // Validate state and set UI text
   useEffect(() => {
@@ -88,10 +96,10 @@ const Otp = () => {
         data.message === 'OTP is valid' ||
         data.success
       ) {
-        // Save token and userType to localStorage and decode token
+        // Save token and userType to cookies and decode token
         if (data.token) {
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('userType', data.userType); // Save userType
+          Cookies.set('token', data.token, cookieOptions); // Changed from localStorage
+          Cookies.set('userType', data.userType, cookieOptions); // Changed from localStorage
           try {
             const decodedToken = jwtDecode(data.token);
             console.log('Decoded JWT:', decodedToken);
