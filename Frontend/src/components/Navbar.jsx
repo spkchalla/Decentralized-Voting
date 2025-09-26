@@ -139,12 +139,12 @@ const Navbar = () => {
             ></span>
           </button>
           <button
-            onClick={() => navigate('/people')}
+            onClick={() => navigate('/approval')}
             className={`relative cursor-pointer group transition-all duration-200 ${
-              location.pathname === '/people' ? 'text-indigo-100 font-bold' : 'hover:text-indigo-100'
+              location.pathname === '/approval' ? 'text-indigo-100 font-bold' : 'hover:text-indigo-100'
             }`}
           >
-            People
+            Approval
             <span
               className={`absolute left-0 bottom-0 h-[2px] bg-indigo-100 transition-all duration-300 ${
                 location.pathname === '/people' ? 'w-full' : 'w-0 group-hover:w-full'

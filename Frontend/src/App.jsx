@@ -11,6 +11,7 @@ import { AuthProvider } from './context/AppContext';
 import Navbar from './components/Navbar';
 import PageNotFound from './pages/PageNotFound';
 import Profile from './pages/Profile';
+import Approval from './pages/Approval';
 
 const App = () => {
   return (
@@ -25,10 +26,10 @@ const App = () => {
           <Route path="/otp-verification" element={<Otp />} />
           <Route path="/profile" element={<Profile/>} />
           <Route path = "/*" element = {<PageNotFound/>}/>
+          <Route path = "/approval" element = {<Approval/>}/>
         </Routes>
       </AuthProvider>
-      <Routes>
-      </Routes>
+
     </div>
   );
 };
