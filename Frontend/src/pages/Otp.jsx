@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-import Cookies from 'js-cookie'; // Add this import
+import Cookies from 'js-cookie';
 
 const Otp = () => {
   const navigate = useNavigate();
@@ -14,7 +14,6 @@ const Otp = () => {
   const purpose = location.state?.purpose || 'verification';
   const email = location.state?.email || '';
   const source = location.state?.source || 'register';
-  const userId = location.state?.userId || '';
 
   // State for OTP input
   const [otp, setOtp] = useState('');
@@ -36,7 +35,6 @@ const Otp = () => {
     console.log('OTP page - purpose:', purpose);
     console.log('OTP page - email:', email);
     console.log('OTP page - source:', source);
-    console.log('OTP page - userId:', userId);
 
     if (purpose === 'reset') {
       setTitle('Reset Password');
@@ -50,90 +48,110 @@ const Otp = () => {
       setSourceLabel(source === 'register' ? 'Register' : 'Login');
     }
 
-    if (!email || (source === 'register' && !userId)) {
-      console.error('Validation failed: email=', email, 'userId=', userId, 'source=', source);
+    if (!email) {
+      console.error('Validation failed: email=', email, 'source=', source);
       toast.error('Required information missing. Please go back and try again.');
       navigate('/login');
     }
-  }, [purpose, email, source, userId, navigate]);
+  }, [purpose, email, source, navigate]);
 
   // Handle OTP submission
-  const onSubmitHandler = async (e) => {
-    e.preventDefault();
-    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
-      toast.error('Please enter a valid 6-digit OTP.');
-      return;
+const onSubmitHandler = async (e) => {
+  e.preventDefault();
+  if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+    toast.error('Please enter a valid 6-digit OTP.');
+    return;
+  }
+  try {
+    axios.defaults.withCredentials = true;
+    let response;
+    if (source === 'register') {
+      console.log('Submitting to /approval/verify-otp with email:', email, 'and OTP:', otp);
+      response = await axios.post(`${backendUrl}/approval/verify-otp`, {
+        email,
+        otp,
+      });
+    } else if (source === 'forgot-password') {
+      console.log('Submitting to /login/verify with email:', email, 'and OTP:', otp);
+      response = await axios.post(`${backendUrl}/login/verify`, {
+        email,
+        otp,
+      });
+    } else {
+      console.log('Submitting to /login/login-otp with email:', email, 'purpose:', purpose, 'and OTP:', otp);
+      response = await axios.post(`${backendUrl}/login/login-otp`, {
+        email,
+        otp,
+        purpose,
+      });
     }
-    try {
-      axios.defaults.withCredentials = true;
-      let response;
-      if (source === 'register') {
-        console.log('Submitting to /user/verify-otp with userId:', userId, 'and OTP:', otp);
-        response = await axios.post(`${backendUrl}/user/verify-otp`, {
-          userId,
-          otp,
-        });
-      } else if (source === 'forgot-password') {
-        console.log('Submitting to /login/verify with email:', email, 'and OTP:', otp);
-        response = await axios.post(`${backendUrl}/login/verify`, {
-          email,
-          otp,
-        });
-      } else {
-        console.log('Submitting to /login/login-otp with email:', email, 'purpose:', purpose, 'and OTP:', otp);
-        response = await axios.post(`${backendUrl}/login/login-otp`, {
-          email,
-          otp,
-          purpose,
-        });
-      }
-      const { data } = response;
-      console.log('OTP verification response:', data);
+    const { data, status } = response;
+    console.log('OTP verification response:', data, 'status:', status);
 
-      if (
-        data.message === 'User verified successfully' ||
-        data.message === 'Login successful' ||
-        data.message === 'OTP is valid' ||
-        data.success
-      ) {
-        // Save token and userType to cookies and decode token
-        if (data.token) {
-          Cookies.set('token', data.token, cookieOptions); // Changed from localStorage
-          Cookies.set('userType', data.userType, cookieOptions); // Changed from localStorage
-          try {
-            const decodedToken = jwtDecode(data.token);
-            console.log('Decoded JWT:', decodedToken);
-            console.log('Stored userType:', data.userType);
-          } catch (error) {
-            console.error('Error decoding JWT:', error);
+    if (
+      data.message === 'User verified successfully' ||
+      data.message === 'Login successful' ||
+      data.message === 'OTP is valid' ||
+      data.message === 'OTP verified successfully, awaiting admin approval' || // Add this condition
+      data.success
+    ) {
+      // Save token and userType to cookies and decode token
+      if (data.token) {
+        Cookies.set('token', data.token, cookieOptions);
+        Cookies.set('userType', data.userType, cookieOptions);
+        try {
+          const decodedToken = jwtDecode(data.token);
+          console.log('Decoded JWT:', decodedToken);
+          console.log('Stored userType:', data.userType);
+        } catch (error) {
+          console.error('Error decoding JWT:', error);
+        }
+      }
+
+      if (source === 'register' && status === 200) {
+        toast.success(
+          data.message === 'OTP verified successfully, awaiting admin approval'
+            ? 'OTP verified successfully! Awaiting admin approval. You will be notified once approved.'
+            : 'User verified successfully! Please log in.',
+          {
+            position: 'top-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: 'colored',
           }
-        }
-
-        if (source === 'register') {
-          toast.success('User verified successfully! Please log in.');
-          navigate('/login');
-        } else if (source === 'forgot-password') {
-          toast.success('OTP Verified! Please create a new password.');
-          navigate('/reset-password', { state: { email, otp } });
-        } else {
-          toast.success('Login successful!');
-          navigate('/');
-        }
+        );
+        navigate('/login');
+      } else if (source === 'forgot-password') {
+        toast.success('OTP Verified! Please create a new password.');
+        navigate('/reset-password', { state: { email, otp } });
       } else {
-        toast.error(data.message || 'OTP verification failed.');
+        toast.success('Login successful!');
+        navigate('/');
       }
-    } catch (error) {
-      console.error('Error during OTP verification:', error.response?.data, error.response?.status);
-      toast.error(error.response?.data?.message || 'Verification failed. Please try again.');
+    } else {
+      toast.error(data.message || 'OTP verification failed.');
     }
-  };
-
+  } catch (error) {
+    console.error('Error during OTP verification:', error.response?.data, error.response?.status);
+    toast.error(error.response?.data?.message || 'Verification failed. Please try again.');
+  }
+};
   // Handle OTP resend
   const handleResendOtp = async () => {
     try {
       axios.defaults.withCredentials = true;
-      console.log('Submitting to /login/resend with email:', email);
-      const { data } = await axios.post(`${backendUrl}/login/resend`, { email });
+      let endpoint;
+      if (source === 'register') {
+        endpoint = '/approval/resend';
+      } else {
+        endpoint = '/login/resend';
+      }
+      console.log('Submitting to', endpoint, 'with email:', email);
+      const { data } = await axios.post(`${backendUrl}${endpoint}`, { email });
       console.log('Resend OTP response:', data);
       if (data.message === 'OTP resent successfully' || data.success) {
         toast.info(`A new OTP has been sent to ${email}.`);

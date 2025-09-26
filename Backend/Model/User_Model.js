@@ -20,43 +20,43 @@ const userSchema = new Schema({
         required: true
     },
     publicKey: {
-        type: String, // Store encrypted public key
+        type: String,
         required: true
     },
     publicKeyIV: {
-        type: String, // Store IV for public key encryption
+        type: String,
         required: true
     },
     publicKeyAuthTag: {
-        type: String, // Store auth tag for public key encryption
+        type: String,
         required: true
     },
     privateKey: {
-        type: String, // Store encrypted private key
+        type: String,
         required: true
     },
     privateKeyIV: {
-        type: String, // Store IV for private key encryption
+        type: String,
         required: true
     },
     privateKeyAuthTag: {
-        type: String, // Store auth tag for private key encryption
+        type: String,
         required: true
     },
     privateKeySalt: {
-        type: String, // Store salt used for AES key derivation in hex
+        type: String,
         required: true
     },
     token: {
-        type: String, // Store encrypted token
+        type: String,
         required: true
     },
     tokenIV: {
-        type: String, // Store IV for token encryption
+        type: String,
         required: true
     },
     tokenAuthTag: {
-        type: String, // Store auth tag for token encryption
+        type: String,
         required: true
     },
     isVerified: {
@@ -68,13 +68,12 @@ const userSchema = new Schema({
         expiresAt: { type: Date }
     },
     pastElections: [{
-        eid: { type: mongoose.Schema.ObjectId, ref: "Election" },
+        eid: { type: mongoose.Schema.Types.ObjectId, ref: "Election" },
         hasVoted: { type: Boolean, default: false }
     }],
-    status:{
-        type:String,
-        enum:["Accepted", "Pending", "Rejected"],
-        default:"Pending"
+    pincode:{
+        type:Number,
+        requred:true
     }
 }, { timestamps: true });
 

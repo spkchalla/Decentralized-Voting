@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { assets } from '../assets/assets';
 import useAuth from '../context/useAuth';
 import Navbar from '../components/Navbar';
 
@@ -15,7 +14,9 @@ const Approval = () => {
   const [activeTab, setActiveTab] = useState('All');
   const [editUserId, setEditUserId] = useState(null);
   const [editName, setEditName] = useState('');
-  const [isActionLoading, setIsActionLoading] = useState(false); // Track loading state for actions
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [rejectModal, setRejectModal] = useState({ isOpen: false, userId: null });
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -78,7 +79,7 @@ const Approval = () => {
     }
   };
 
-  const handleReject = async (userId) => {
+  const handleReject = async (userId, reason) => {
     setIsActionLoading(true);
     try {
       const token = Cookies.get('token');
@@ -90,6 +91,7 @@ const Approval = () => {
       const response = await axios.delete(`${backendUrl}/approval/reject/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true,
+        data: { reason },
       });
       toast.success(response.data.message);
       setAllUsers(allUsers.map(user => user._id === userId ? { ...user, status: 'Rejected' } : user));
@@ -101,6 +103,8 @@ const Approval = () => {
       }
     } finally {
       setIsActionLoading(false);
+      setRejectModal({ isOpen: false, userId: null });
+      setRejectReason('');
     }
   };
 
@@ -144,6 +148,16 @@ const Approval = () => {
   const cancelEditing = () => {
     setEditUserId(null);
     setEditName('');
+  };
+
+  const openRejectModal = (userId) => {
+    setRejectModal({ isOpen: true, userId });
+    setRejectReason('');
+  };
+
+  const closeRejectModal = () => {
+    setRejectModal({ isOpen: false, userId: null });
+    setRejectReason('');
   };
 
   const filteredUsers = activeTab === 'All'
@@ -266,7 +280,7 @@ const Approval = () => {
                     )}
                     {(activeTab === 'Pending' || activeTab === 'Accepted') && (
                       <button
-                        onClick={() => handleReject(user._id)}
+                        onClick={() => openRejectModal(user._id)}
                         className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
                           isActionLoading
                             ? 'bg-gray-500 cursor-not-allowed'
@@ -284,6 +298,48 @@ const Approval = () => {
           )}
         </div>
       </div>
+
+      {/* Reject Reason Modal */}
+      {rejectModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-900 p-6 rounded-lg shadow-lg w-full sm:w-96 text-indigo-300 text-sm">
+            <h3 className="text-xl font-semibold text-white mb-4">Reject User</h3>
+            <p className="mb-4">Please provide a reason for rejecting this user:</p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="w-full bg-[#333A5C] text-white p-2 rounded border border-indigo-400 focus:outline-none mb-4"
+              rows="4"
+              placeholder="Enter rejection reason"
+              disabled={isActionLoading}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleReject(rejectModal.userId, rejectReason)}
+                className={`flex-1 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  isActionLoading || !rejectReason.trim()
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-red-500 to-red-900 text-white cursor-pointer'
+                }`}
+                disabled={isActionLoading || !rejectReason.trim()}
+              >
+                Submit
+              </button>
+              <button
+                onClick={closeRejectModal}
+                className={`flex-1 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  isActionLoading
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gray-500 text-white cursor-pointer'
+                }`}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
