@@ -14,7 +14,7 @@ const useAuth = () => {
 
   // Cookie options for security (adjust as needed)
   const cookieOptions = {
-    secure: process.env.NODE_ENV === 'production', // HTTPS in prod
+    secure: import.meta.env.PROD, // HTTPS in prod
     sameSite: 'strict',
     expires: 7, // Or tie to token exp
   };
