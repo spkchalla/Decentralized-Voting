@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { assets } from '../assets/assets';
 import useAuth from '../context/useAuth';
 import Navbar from '../components/Navbar';
 
@@ -11,8 +10,7 @@ const Approval = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading, error, logout } = useAuth();
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-  const [pendingUsers, setPendingUsers] = useState([]);
-  const [acceptedUsers, setAcceptedUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('All');
   const [editUserId, setEditUserId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -28,7 +26,7 @@ const Approval = () => {
       return;
     }
 
-    const fetchPendingUsers = async () => {
+    const fetchAllUsers = async () => {
       try {
         const token = Cookies.get('token');
         console.log('Token:', token);
@@ -36,54 +34,24 @@ const Approval = () => {
           throw new Error('No authentication token found.');
         }
 
-        console.log('Fetching from:', `${backendUrl}/approval/pending`);
-        const response = await axios.get(`${backendUrl}/approval/pending`, {
+        console.log('Fetching from:', `${backendUrl}/user/`);
+        const response = await axios.get(`${backendUrl}/user/`, {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true,
         });
-        console.log('Pending users response:', response.data);
-        setPendingUsers(response.data);
+        console.log('All users response:', response.data);
+        setAllUsers(response.data);
       } catch (error) {
-        console.error('Error fetching pending users:', error.message, error.response?.data, error.response?.status);
-        toast.error(error.response?.data?.message || error.message || 'Failed to fetch pending users.');
+        console.error('Error fetching users:', error.message, error.response?.data, error.response?.status);
+        toast.error(error.response?.data?.message || error.message || 'Failed to fetch users.');
         if (error.response?.status === 401) {
           logout();
         }
       }
     };
 
-    fetchPendingUsers();
+    fetchAllUsers();
   }, [backendUrl, isAuthenticated, user, loading, navigate, logout]);
-
-  useEffect(() => {
-    if (activeTab !== 'Accepted') return;
-
-    const fetchAcceptedUsers = async () => {
-      try {
-        const token = Cookies.get('token');
-        console.log('Token:', token);
-        if (!token) {
-          throw new Error('No authentication token found.');
-        }
-
-        console.log('Fetching from:', `${backendUrl}/user`);
-        const response = await axios.get(`${backendUrl}/user`, {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true,
-        });
-        console.log('Accepted users response:', response.data);
-        setAcceptedUsers(response.data);
-      } catch (error) {
-        console.error('Error fetching accepted users:', error.message, error.response?.data, error.response?.status);
-        toast.error(error.response?.data?.message || error.message || 'Failed to fetch accepted users.');
-        if (error.response?.status === 401) {
-          logout();
-        }
-      }
-    };
-
-    fetchAcceptedUsers();
-  }, [activeTab, backendUrl, logout]);
 
   const handleApprove = async (userId) => {
     setIsActionLoading(true);
@@ -99,11 +67,7 @@ const Approval = () => {
         withCredentials: true,
       });
       toast.success(response.data.message);
-      const updatedUser = pendingUsers.find(user => user._id === userId);
-      if (updatedUser) {
-        setPendingUsers(pendingUsers.filter(user => user._id !== userId));
-        setAcceptedUsers([...acceptedUsers, { ...updatedUser, status: 'Accepted', isVerified: true }]);
-      }
+      setAllUsers(allUsers.map(user => user._id === userId ? { ...user, status: 'Accepted', isVerified: true } : user));
     } catch (error) {
       console.error('Error approving user:', error.message, error.response?.data, error.response?.status);
       toast.error(error.response?.data?.message || 'Failed to approve user.');
@@ -127,11 +91,10 @@ const Approval = () => {
       const response = await axios.delete(`${backendUrl}/approval/reject/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true,
-        data: { reason }, // Send reason in request body
+        data: { reason },
       });
       toast.success(response.data.message);
-      setPendingUsers(pendingUsers.filter(user => user._id !== userId));
-      setAcceptedUsers(acceptedUsers.filter(user => user._id !== userId));
+      setAllUsers(allUsers.map(user => user._id === userId ? { ...user, status: 'Rejected' } : user));
     } catch (error) {
       console.error('Error rejecting user:', error.message, error.response?.data, error.response?.status);
       toast.error(error.response?.data?.message || 'Failed to reject user.');
@@ -163,7 +126,7 @@ const Approval = () => {
         withCredentials: true,
       });
       toast.success(response.data.message);
-      setPendingUsers(pendingUsers.map(user => user._id === userId ? { ...user, name: editName } : user));
+      setAllUsers(allUsers.map(user => user._id === userId ? { ...user, name: editName } : user));
       setEditUserId(null);
       setEditName('');
     } catch (error) {
@@ -197,16 +160,9 @@ const Approval = () => {
     setRejectReason('');
   };
 
-  const combinedUsers = [
-    ...pendingUsers,
-    ...acceptedUsers.filter(acceptedUser => !pendingUsers.some(pendingUser => pendingUser._id === acceptedUser._id))
-  ];
-
   const filteredUsers = activeTab === 'All'
-    ? combinedUsers
-    : activeTab === 'Pending'
-      ? pendingUsers
-      : acceptedUsers;
+    ? allUsers
+    : allUsers.filter(user => user.status === activeTab);
 
   if (loading) {
     return (
@@ -225,7 +181,7 @@ const Approval = () => {
           <p className="text-center text-base mb-4">Review and manage user accounts.</p>
 
           <div className="flex justify-center mb-6">
-            {['All', 'Pending', 'Accepted'].map(tab => (
+            {['All', 'Pending', 'Rejected', 'Accepted'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -254,7 +210,7 @@ const Approval = () => {
               {filteredUsers.map(user => (
                 <div key={user._id} className="bg-[#333A5C] p-4 rounded-lg flex justify-between items-center">
                   <div>
-                    {editUserId === user._id && activeTab === 'Pending' ? (
+                    {editUserId === user._id && (activeTab === 'Pending' || activeTab === 'Rejected') ? (
                       <div className="flex items-center gap-2 mb-2">
                         <input
                           type="text"
@@ -291,7 +247,7 @@ const Approval = () => {
                       <>
                         <p className="text-white">
                           <strong>Name:</strong> {user.name}
-                          {activeTab === 'Pending' && (
+                          {(activeTab === 'Pending' || activeTab === 'Rejected') && (
                             <button
                               onClick={() => startEditing(user._id, user.name)}
                               className={`ml-2 text-indigo-400 underline text-base transition-colors duration-200 hover:text-indigo-200 ${
@@ -304,13 +260,12 @@ const Approval = () => {
                           )}
                         </p>
                         <p className="text-indigo-400"><strong>Email:</strong> {user.email}</p>
-                        <p className="text-indigo-400"><strong>Pincode:</strong> {user.pincode}</p>
                         <p className="text-gray-400"><strong>Status:</strong> {user.status}</p>
                       </>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {activeTab === 'Pending' && (
+                    {(activeTab === 'Pending' || activeTab === 'Rejected') && (
                       <button
                         onClick={() => handleApprove(user._id)}
                         className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
