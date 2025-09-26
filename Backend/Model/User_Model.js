@@ -70,7 +70,12 @@ const userSchema = new Schema({
     pastElections: [{
         eid: { type: mongoose.Schema.ObjectId, ref: "Election" },
         hasVoted: { type: Boolean, default: false }
-    }]
+    }],
+    status:{
+        type:String,
+        enum:["Accepted", "Pending", "Rejected"],
+        default:"Pending"
+    }
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);

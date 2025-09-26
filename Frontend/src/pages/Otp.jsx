@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 
 const Otp = () => {
   const navigate = useNavigate();
@@ -87,6 +88,19 @@ const Otp = () => {
         data.message === 'OTP is valid' ||
         data.success
       ) {
+        // Save token and userType to localStorage and decode token
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('userType', data.userType); // Save userType
+          try {
+            const decodedToken = jwtDecode(data.token);
+            console.log('Decoded JWT:', decodedToken);
+            console.log('Stored userType:', data.userType);
+          } catch (error) {
+            console.error('Error decoding JWT:', error);
+          }
+        }
+
         if (source === 'register') {
           toast.success('User verified successfully! Please log in.');
           navigate('/login');

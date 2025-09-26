@@ -6,6 +6,7 @@ import userRoute from "./Route/User_Routes.js";
 import LoginRouter from "./Route/Login_Routes.js";
 import PartyRouter from "./Route/Party_Routes.js";
 import CandidateRouter from "./Route/Candidate_Routes.js";
+import ApprovalRouter from "./Route/Approval_Route.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +45,10 @@ app.use(
 
 app.use(
     '/candidate', CandidateRouter
+)
+
+app.use(
+    '/approval', ApprovalRouter
 )
 
 app.listen(PORT,() =>{
