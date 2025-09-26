@@ -178,7 +178,7 @@ export const getElectionResults = async (req, res) => {
     res.status(200).json({
         election: election.title,
         results: election.candidates.map(c => ({
-            candidate: c.candidate.name,
+            candidate: c.candidate?.name ?? "Unknown Candidate",
             votes: c.votesCount
         }))
     });
