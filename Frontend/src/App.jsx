@@ -8,6 +8,9 @@ import Otp from './pages/Otp';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AppContext';
+import Navbar from './components/Navbar';
+import PageNotFound from './pages/PageNotFound';
+import Profile from './pages/Profile';
 
 const App = () => {
   return (
@@ -20,8 +23,12 @@ const App = () => {
           <Route path="/email-verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/otp-verification" element={<Otp />} />
+          <Route path="/profile" element={<Profile/>} />
+          <Route path = "/*" element = {<PageNotFound/>}/>
         </Routes>
       </AuthProvider>
+      <Routes>
+      </Routes>
     </div>
   );
 };

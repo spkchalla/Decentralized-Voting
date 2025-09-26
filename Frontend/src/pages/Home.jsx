@@ -20,6 +20,7 @@ const Home = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-[url('/bg_img.png')] bg-cover bg-center">
       <Navbar />
       <Header />
+      {/*
       <div className="mt-4 text-white text-center bg-slate-900 p-4 rounded-lg">
         <h3 className="text-lg font-semibold">User Information</h3>
         {error ? (
@@ -44,7 +45,7 @@ const Home = () => {
         ) : (
           <p>No user information available.</p>
         )}
-      </div>
+      </div>*/}
     </div>
   );
 };

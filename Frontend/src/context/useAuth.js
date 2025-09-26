@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
+import Cookies from 'js-cookie'; // Add this import
 
 const useAuth = () => {
   const [user, setUser] = useState(null); // { id, iat, exp, name, email, voterId?, userType }
@@ -11,13 +12,20 @@ const useAuth = () => {
   const navigate = useNavigate();
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
+  // Cookie options for security (adjust as needed)
+  const cookieOptions = {
+    secure: import.meta.env.PROD, // HTTPS in prod
+    sameSite: 'strict',
+    expires: 7, // Or tie to token exp
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
       console.log('useAuth: Checking for token and userType...');
-      const token = localStorage.getItem('token');
-      const userType = localStorage.getItem('userType');
-      console.log('useAuth - Token from localStorage:', token);
-      console.log('useAuth - UserType from localStorage:', userType);
+      const token = Cookies.get('token'); // Changed from localStorage
+      const userType = Cookies.get('userType'); // Changed from localStorage
+      console.log('useAuth - Token from cookies:', token);
+      console.log('useAuth - UserType from cookies:', userType);
 
       if (token) {
         try {
@@ -36,9 +44,10 @@ const useAuth = () => {
               ? `${backendUrl}/admin/get/${idField}`
               : `${backendUrl}/user/get/${idField}`;
 
-          // Fetch user details
+          // Fetch user details (consider adding withCredentials: true if backend uses cookie auth)
           const response = await axios.get(endpoint, {
             headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true, // Enable if backend reads cookies
           });
           console.log('useAuth - Full API response:', response.data);
           const userData = response.data.admin || response.data.user || response.data;
@@ -67,12 +76,13 @@ const useAuth = () => {
           console.error('useAuth - Error:', error.response?.data || error.message);
           setError(error.response?.data?.message || 'Authentication failed.');
           setIsAuthenticated(false);
-          localStorage.removeItem('token');
-          localStorage.removeItem('userType');
+          // Clear cookies on error
+          Cookies.remove('token', cookieOptions);
+          Cookies.remove('userType', cookieOptions);
           navigate('/login');
         }
       } else {
-        console.log('useAuth - No token found in localStorage');
+        console.log('useAuth - No token found in cookies');
         setError('No token found. Please log in.');
         setIsAuthenticated(false);
         navigate('/login');
@@ -84,9 +94,9 @@ const useAuth = () => {
   }, [navigate, backendUrl]);
 
   const logout = () => {
-    console.log('useAuth - Logging out: Clearing localStorage and navigating to /login');
-    localStorage.removeItem('token');
-    localStorage.removeItem('userType');
+    console.log('useAuth - Logging out: Clearing cookies and navigating to /login');
+    Cookies.remove('token', cookieOptions); // Changed from localStorage
+    Cookies.remove('userType', cookieOptions); // Changed from localStorage
     setUser(null);
     setIsAuthenticated(false);
     navigate('/login');
