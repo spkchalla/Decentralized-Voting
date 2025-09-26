@@ -1,10 +1,13 @@
+// File: src/pages/Login.jsx
 import React, { useState, useContext } from 'react';
 import { assets } from '../assets/assets';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import { AuthContext } from '../context/AppContext';
 import * as jwtDecode from 'jwt-decode';
+import { AuthContext } from '../context/AppContext';
+import Header from '../components/Header1'; 
+
 
 const Login = () => {
   const navigate = useNavigate();
@@ -21,8 +24,6 @@ const Login = () => {
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
-
-    // Basic client-side validation
     if (!email || !password) {
       toast.error('Email and password are required.');
       return;
@@ -64,18 +65,14 @@ const Login = () => {
           toast.error(data.message || 'Registration failed.');
         }
       } else {
-        const response = await axios.post(`${backendUrl}/login/`, {
-          email,
-          password,
-        });
+        const response = await axios.post(`${backendUrl}/login/`, { email, password });
         const { data, status } = response;
-        console.log('Login response:', { status, data });
         if (data.token) {
           console.log('JWT token received:', data.token);
           const decoded = jwtDecode.default(data.token);
           console.log('Decoded JWT:', decoded);
         }
-        if (status === 200 && (data.message === 'OTP sent to email' || data.message === 'User registered, OTP sent')) {
+        if (status === 200 && data.message?.includes('OTP sent')) {
           toast.success('Please verify OTP to login.');
           navigate('/otp-verification', { state: { purpose: 'verification', email, source: 'login' } });
         } else if (status === 200 && (data.message === 'Login successful' || data.success)) {
@@ -133,20 +130,18 @@ const Login = () => {
     : 'w-full py-2.5 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white font-medium cursor-pointer transition-transform duration-200 hover:scale-105 hover:bg-gradient-to-r hover:from-indigo-400 hover:to-indigo-800 hover:shadow-lg';
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-6 sm:px-0">
-      <img
-        onClick={() => navigate('/')}
-        src={assets.vote_image}
-        alt=""
-        className="absolute left-5 sm:left-20 top-5 w-28 sm:w-32 cursor-pointer"
-      />
-      <div className="bg-slate-900 p-10 rounded-lg shadow-lg w-full sm:w-96 text-indigo-300 text-sm">
-        <h2 className="text-3xl font-semibold text-white text-center mb-3">
-          {state === 'Sign up' ? 'Create Account' : 'Login'}
-        </h2>
-        <p className="text-center text-sm mb-6">
-          {state === 'Sign up' ? 'Create your account' : 'Login to your account!'}
-        </p>
+    <div className="min-h-screen flex flex-col">
+      <Header /> {/* Reusable Header */}
+
+      {/* Centered Login Form */}
+      <div className="flex flex-1 items-center justify-center px-6 sm:px-0">
+        <div className="bg-slate-900 p-10 rounded-lg shadow-lg w-full sm:w-96 text-indigo-300 text-sm">
+          <h2 className="text-3xl font-semibold text-white text-center mb-3">
+            {state === 'Sign up' ? 'Create Account' : 'Login'}
+          </h2>
+          <p className="text-center text-sm mb-6">
+            {state === 'Sign up' ? 'Create your account' : 'Login to your account!'}
+          </p>
 
         <form onSubmit={onSubmitHandler}>
           {state === 'Sign up' && (
@@ -200,45 +195,36 @@ const Login = () => {
             />
           </div>
 
-          {state === 'Login' && (
-            <p
-              onClick={handleForgotPassword}
-              className="mb-4 text-indigo-500 cursor-pointer hover:text-indigo-400"
-            >
-              Forgot Password?
+            {state === 'Login' && (
+              <p
+                onClick={handleForgotPassword}
+                className="mb-4 text-indigo-500 cursor-pointer hover:text-indigo-400"
+              >
+                Forgot Password?
+              </p>
+            )}
+
+            <button type="submit" disabled={isSubmitting} className={buttonClasses}>
+              {isSubmitting ? 'Requesting OTP' : state === 'Sign up' ? 'Sign Up' : 'Login'}
+            </button>
+          </form>
+
+          {state === 'Sign up' ? (
+            <p className="text-gray-400 text-center text-xs mt-4">
+              Already have an account?{' '}
+              <span onClick={() => setState('Login')} className="text-blue-400 cursor-pointer underline">
+                Login Here
+              </span>
+            </p>
+          ) : (
+            <p className="text-gray-400 text-center text-xs mt-4">
+              Don't have an account?{' '}
+              <span onClick={() => setState('Sign up')} className="text-blue-400 cursor-pointer underline">
+                Sign up
+              </span>
             </p>
           )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={buttonClasses}
-          >
-            {isSubmitting ? 'Requesting OTP' : state === 'Sign up' ? 'Sign Up' : 'Login'}
-          </button>
-        </form>
-
-        {state === 'Sign up' ? (
-          <p className="text-gray-400 text-center text-xs mt-4">
-            Already have an account?{' '}
-            <span
-              onClick={() => setState('Login')}
-              className="text-blue-400 cursor-pointer underline"
-            >
-              Login Here
-            </span>
-          </p>
-        ) : (
-          <p className="text-gray-400 text-center text-xs mt-4">
-            Don't have an account?{' '}
-            <span
-              onClick={() => setState('Sign up')}
-              className="text-blue-400 cursor-pointer underline"
-            >
-              Sign up
-            </span>
-          </p>
-        )}
+        </div>
       </div>
 
       {/* Modal for 403 responses */}
