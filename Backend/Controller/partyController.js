@@ -145,3 +145,26 @@ export const activateParty = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const getActivePartiesDropdown = async (req, res) => {
+    try {
+        // Fetch active parties (status: 1) and select only _id and name
+        const parties = await Party.find({ status: 1 }, { _id: 1, name: 1 })
+            .sort({ name: 1 }); // Sort alphabetically by name for better UX
+
+        // Format the response for dropdown (array of { value, label })
+        const dropdownData = parties.map(party => ({
+            _id: party._id.toString(), // Convert ObjectId to string for dropdown
+            label: party.name
+        }));
+
+        res.status(200).json({
+            message: "Active parties retrieved successfully",
+            parties: dropdownData,
+            total: dropdownData.length
+        });
+    } catch (error) {
+        console.error("Error fetching active parties for dropdown:", error);
+        res.status(500).json({ message: "Error fetching active parties", error: error.message });
+    }
+};
