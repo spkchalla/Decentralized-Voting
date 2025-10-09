@@ -12,6 +12,7 @@ import Navbar from './components/Navbar';
 import PageNotFound from './pages/PageNotFound';
 import Profile from './pages/Profile';
 import Approval from './pages/Approval';
+import Elections from './pages/Elections';
 
 const App = () => {
   return (
@@ -27,6 +28,7 @@ const App = () => {
           <Route path="/profile" element={<Profile/>} />
           <Route path = "/*" element = {<PageNotFound/>}/>
           <Route path = "/approval" element = {<Approval/>}/>
+          <Route path = "/elections" element = {<Elections/>}/>
         </Routes>
       </AuthProvider>
 
