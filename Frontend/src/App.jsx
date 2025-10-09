@@ -13,6 +13,8 @@ import PageNotFound from './pages/PageNotFound';
 import Profile from './pages/Profile';
 import Approval from './pages/Approval';
 import Elections from './pages/Elections';
+import Admin from './pages/Admin';
+
 
 const App = () => {
   return (
@@ -29,6 +31,7 @@ const App = () => {
           <Route path = "/*" element = {<PageNotFound/>}/>
           <Route path = "/approval" element = {<Approval/>}/>
           <Route path = "/elections" element = {<Elections/>}/>
+          <Route path = "/admin" element = {<Admin/>}/>
         </Routes>
       </AuthProvider>
 
