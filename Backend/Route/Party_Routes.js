@@ -7,18 +7,20 @@ import {
   viewPartyById,
   deleteParty,
   viewActiveParties,
-  activateParty
+  activateParty,
+  getActivePartiesDropdown
 } from "../Controller/partyController.js"; // Adjust path as needed
 
 const PartyRouter = express.Router();
 
 // Routes with protectAdmin middleware
 PartyRouter.post("/add", protectAdmin, addParty);
-PartyRouter.put("/edit/:id", protectAdmin, editParty);
+PartyRouter.patch("/edit/:id", protectAdmin, editParty);
 PartyRouter.get("/all", protectAdmin, viewAllParties);
 PartyRouter.get("/active", protectAdmin, viewActiveParties);
 PartyRouter.get("/view/:id", protectAdmin, viewPartyById);
 PartyRouter.delete("/:id", protectAdmin, deleteParty);
-PartyRouter.put("/active/:id", protectAdmin, activateParty);
+PartyRouter.patch("/active/:id", protectAdmin, activateParty);
+PartyRouter.get("/dropdown", protectAdmin, getActivePartiesDropdown);
 
 export default PartyRouter;

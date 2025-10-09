@@ -42,29 +42,26 @@ export const editParty = async (req, res) => {
     const { id } = req.params;
     const { name, symbol } = req.body;
 
-    // Validate required fields
-    if (!name) {
-      return res.status(400).json({ message: "Name is required" });
-    }
-
     // Check if party exists
     const party = await Party.findById(id);
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
 
-    // Check for duplicate name (excluding current party)
-    const existingParty = await Party.findOne({
-      name,
-      _id: { $ne: id },
-    });
-    if (existingParty) {
-      return res.status(400).json({ message: "Party name already exists" });
+    // Check for duplicate name if 'name' is provided
+    if (name) {
+      const existingParty = await Party.findOne({ name, _id: { $ne: id } });
+      if (existingParty) {
+        return res.status(400).json({ message: "Party name already exists" });
+      }
+      party.name = name; // update name only if provided
     }
 
-    // Update party (party_id remains unchanged)
-    party.name = name;
-    party.symbol = symbol || party.symbol;
+    // Update symbol only if provided
+    if (symbol) {
+      party.symbol = symbol;
+    }
+
     await party.save();
 
     res.status(200).json({ message: "Party updated successfully", party });
@@ -131,17 +128,44 @@ export const deleteParty = async (req, res) => {
 export const activateParty = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Check if party exists
     const party = await Party.findById(id);
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
 
+    // Update only the status field (partial update)
     party.status = 1;
     await party.save();
 
-    res.status(200).json({ message: "Party Activated successfully" });
+    res.status(200).json({ message: "Party activated successfully", party });
   } catch (err) {
-    console.error("Error deleting party:", err);
+    console.error("Error activating party:", err);
     res.status(500).json({ message: "Server error" });
   }
+};
+
+
+export const getActivePartiesDropdown = async (req, res) => {
+    try {
+        // Fetch active parties (status: 1) and select only _id and name
+        const parties = await Party.find({ status: 1 }, { _id: 1, name: 1 })
+            .sort({ name: 1 }); // Sort alphabetically by name for better UX
+
+        // Format the response for dropdown (array of { value, label })
+        const dropdownData = parties.map(party => ({
+            _id: party._id.toString(), // Convert ObjectId to string for dropdown
+            label: party.name
+        }));
+
+        res.status(200).json({
+            message: "Active parties retrieved successfully",
+            parties: dropdownData,
+            total: dropdownData.length
+        });
+    } catch (error) {
+        console.error("Error fetching active parties for dropdown:", error);
+        res.status(500).json({ message: "Error fetching active parties", error: error.message });
+    }
 };

@@ -9,17 +9,19 @@ import {
   viewActiveCandidates,
   activeCandidate,
 } from "../Controller/candidateController.js"; // Adjust path as needed
+//import { getActiveCandidatesDropdown } from "../Controller/candidateController.js";
 
 const CandidateRouter = express.Router();
 
 // Routes with protectAdmin middleware
 CandidateRouter.post("/add", protectAdmin, addCandidate);
-CandidateRouter.put("/edit/:id", protectAdmin, editCandidate);
+CandidateRouter.patch("/edit/:id", protectAdmin, editCandidate);
 CandidateRouter.get("/all", protectAdmin, viewAllCandidates);
 CandidateRouter.get("/active", protectAdmin, viewActiveCandidates);
 CandidateRouter.get("/:id", protectAdmin, viewCandidateById);
 CandidateRouter.delete("/:id", protectAdmin, deleteCandidate);
-CandidateRouter.put("/active/:id", protectAdmin, activeCandidate);
+CandidateRouter.patch("/active/:id", protectAdmin, activeCandidate);
+//CandidateRouter.get("/dropdown", protectAdmin, getActiveCandidatesDropdown);
 
 
 export default CandidateRouter;

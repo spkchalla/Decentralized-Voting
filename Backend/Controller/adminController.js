@@ -148,3 +148,81 @@ export const getAdminId = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
+export const getAllAdmins = async (req, res) => {
+    try {
+        const admins = await Admin.find().select("-otp -password"); // exclude sensitive fields
+
+        const formattedAdmins = admins.map(admin => {
+            const adminObj = admin.toObject();
+            if (adminObj.emailId) {
+                adminObj.email = adminObj.emailId;
+                delete adminObj.emailId;
+            }
+            return adminObj;
+        });
+
+        res.status(200).json(formattedAdmins);
+    } catch (error) {
+        console.error("Fetch all admins error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+export const updateAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, emailId } = req.body; // Only allow these fields
+
+        const updateFields = {};
+
+        if (name) updateFields.name = name;
+        if (phone) updateFields.phone = phone;
+        if (emailId) updateFields.emailId = emailId;
+
+        if (Object.keys(updateFields).length === 0) {
+            return res.status(400).json({ message: "No valid fields provided for update" });
+        }
+
+        const updatedAdmin = await Admin.findByIdAndUpdate(
+            id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        ).select("-otp -password");
+
+        if (!updatedAdmin) {
+            return res.status(404).json({ message: "Admin not found" });
+        }
+
+        const adminObj = updatedAdmin.toObject();
+        if (adminObj.emailId) {
+            adminObj.email = adminObj.emailId;
+            delete adminObj.emailId;
+        }
+
+        res.status(200).json({
+            message: "Admin updated successfully",
+            updatedFields: updateFields,
+            admin: adminObj
+        });
+    } catch (error) {
+        console.error("Update admin error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+export const deleteAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedAdmin = await Admin.findByIdAndDelete(id);
+
+        if (!deletedAdmin) {
+            return res.status(404).json({ message: "Admin not found" });
+        }
+
+        res.status(200).json({ message: "Admin deleted successfully" });
+    } catch (error) {
+        console.error("Delete admin error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
