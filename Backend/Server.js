@@ -6,11 +6,16 @@ import userRoute from "./Route/User_Routes.js";
 import LoginRouter from "./Route/Login_Routes.js";
 import PartyRouter from "./Route/Party_Routes.js";
 import CandidateRouter from "./Route/Candidate_Routes.js";
+import ApprovalRouter from "./Route/Approval_Route.js";
+import electionRouter from "./Route/Election_Routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+    origin: "http://localhost:5173",  // allow only your frontend
+    credentials: true,                // allow cookies / auth headers
+}));
 app.use(express.json());
 
 connectDB();
@@ -41,6 +46,14 @@ app.use(
 
 app.use(
     '/candidate', CandidateRouter
+)
+
+app.use(
+    '/approval', ApprovalRouter
+)
+
+app.use(
+    '/election', electionRouter
 )
 
 app.listen(PORT,() =>{

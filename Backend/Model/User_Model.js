@@ -20,16 +20,44 @@ const userSchema = new Schema({
         required: true
     },
     publicKey: {
-        type: String
+        type: String,
+        required: true
+    },
+    publicKeyIV: {
+        type: String,
+        required: true
+    },
+    publicKeyAuthTag: {
+        type: String,
+        required: true
     },
     privateKey: {
-        type: String // store encrypted private key here
+        type: String,
+        required: true
     },
     privateKeyIV: {
-        type: String // store AES IV in hex
+        type: String,
+        required: true
+    },
+    privateKeyAuthTag: {
+        type: String,
+        required: true
     },
     privateKeySalt: {
-        type: String // store salt used for AES key derivation in hex
+        type: String,
+        required: true
+    },
+    token: {
+        type: String,
+        required: true
+    },
+    tokenIV: {
+        type: String,
+        required: true
+    },
+    tokenAuthTag: {
+        type: String,
+        required: true
     },
     isVerified: {
         type: Boolean,
@@ -40,9 +68,13 @@ const userSchema = new Schema({
         expiresAt: { type: Date }
     },
     pastElections: [{
-        eid: { type: mongoose.Schema.ObjectId, ref: "Election" },
+        eid: { type: mongoose.Schema.Types.ObjectId, ref: "Election" },
         hasVoted: { type: Boolean, default: false }
-    }]
+    }],
+    pincode:{
+        type:Number,
+        requred:true
+    }
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);

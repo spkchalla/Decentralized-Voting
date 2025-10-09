@@ -7,7 +7,8 @@ import {
   viewPartyById,
   deleteParty,
   viewActiveParties,
-  activateParty
+  activateParty,
+  getActivePartiesDropdown
 } from "../Controller/partyController.js"; // Adjust path as needed
 
 const PartyRouter = express.Router();
@@ -20,5 +21,6 @@ PartyRouter.get("/active", protectAdmin, viewActiveParties);
 PartyRouter.get("/view/:id", protectAdmin, viewPartyById);
 PartyRouter.delete("/:id", protectAdmin, deleteParty);
 PartyRouter.put("/active/:id", protectAdmin, activateParty);
+PartyRouter.get("/dropdown", protectAdmin, getActivePartiesDropdown);
 
 export default PartyRouter;

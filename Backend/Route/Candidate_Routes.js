@@ -9,6 +9,7 @@ import {
   viewActiveCandidates,
   activeCandidate,
 } from "../Controller/candidateController.js"; // Adjust path as needed
+//import { getActiveCandidatesDropdown } from "../Controller/candidateController.js";
 
 const CandidateRouter = express.Router();
 
@@ -20,6 +21,7 @@ CandidateRouter.get("/active", protectAdmin, viewActiveCandidates);
 CandidateRouter.get("/:id", protectAdmin, viewCandidateById);
 CandidateRouter.delete("/:id", protectAdmin, deleteCandidate);
 CandidateRouter.put("/active/:id", protectAdmin, activeCandidate);
+//CandidateRouter.get("/dropdown", protectAdmin, getActiveCandidatesDropdown);
 
 
 export default CandidateRouter;
