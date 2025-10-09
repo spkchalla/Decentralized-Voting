@@ -73,24 +73,20 @@ export const editCandidate = async (req, res) => {
     const { id } = req.params;
     const { name, party, currentElection } = req.body;
 
-    // Validate required fields
-    if (!name || !party) {
-      return res.status(400).json({ message: "Name and party are required" });
-    }
-
     // Check if candidate exists
     const candidate = await Candidate.findById(id);
     if (!candidate) {
       return res.status(404).json({ message: "Candidate not found" });
     }
 
-    // Validate party exists and is active
-    const partyExists = await Party.findOne({ _id: party, status: 1 });
-    if (!partyExists) {
-      return res.status(404).json({ message: "Party not found or inactive" });
+    // Only validate fields if they are provided
+    if (party) {
+      const partyExists = await Party.findOne({ _id: party, status: 1 });
+      if (!partyExists) {
+        return res.status(404).json({ message: "Party not found or inactive" });
+      }
     }
 
-    // Validate currentElection (if provided)
     if (currentElection && currentElection.length) {
       for (const electionId of currentElection) {
         const electionExists = await Election.findById(electionId);
@@ -100,16 +96,19 @@ export const editCandidate = async (req, res) => {
       }
     }
 
-    // Check for duplicate name (excluding current candidate)
-    const existingCandidate = await Candidate.findOne({ name, _id: { $ne: id } });
-    if (existingCandidate) {
-      return res.status(400).json({ message: "Candidate name already exists" });
+    // Check for duplicate name if name is being updated
+    if (name) {
+      const existingCandidate = await Candidate.findOne({ name, _id: { $ne: id } });
+      if (existingCandidate) {
+        return res.status(400).json({ message: "Candidate name already exists" });
+      }
     }
 
-    // Update candidate (candidate_id and elections remain unchanged)
-    candidate.name = name;
-    candidate.party = party;
-    candidate.currentElection = currentElection || candidate.currentElection;
+    // Update only provided fields
+    if (name) candidate.name = name;
+    if (party) candidate.party = party;
+    if (currentElection) candidate.currentElection = currentElection;
+
     await candidate.save();
 
     // Populate references for response
@@ -118,12 +117,16 @@ export const editCandidate = async (req, res) => {
       .populate("elections.election_id", "_id name")
       .populate("currentElection", "_id name");
 
-    res.status(200).json({ message: "Candidate updated successfully", candidate: populatedCandidate });
+    res.status(200).json({
+      message: "Candidate updated successfully",
+      candidate: populatedCandidate,
+    });
   } catch (err) {
     console.error("Error editing candidate:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // View all candidates
 export const viewActiveCandidates = async (req, res) => {
@@ -193,17 +196,20 @@ export const deleteCandidate = async (req, res) => {
 export const activeCandidate = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Check if candidate exists
     const candidate = await Candidate.findById(id);
     if (!candidate) {
       return res.status(404).json({ message: "Candidate not found" });
     }
 
+    // Update only the status field (partial update)
     candidate.status = 1;
     await candidate.save();
 
-    res.status(200).json({ message: "Candidate Activated successfully" });
+    res.status(200).json({ message: "Candidate activated successfully", candidate });
   } catch (err) {
-    console.error("Error deleting candidate:", err);
+    console.error("Error activating candidate:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
