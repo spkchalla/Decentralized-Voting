@@ -22,7 +22,9 @@ electionRouter.get("/",protectAdmin, getAllElections);
 electionRouter.get("/:id", protectAdmin,getElectionById);
 
 // PUT /api/elections/:id - Update election by ID
+
 electionRouter.put("/update/:id", protectAdmin,updateElection);
+
 
 // DELETE /api/elections/:id - Delete election by ID
 electionRouter.delete("/:id", protectAdmin,deleteElection);
