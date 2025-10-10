@@ -147,7 +147,7 @@ const Navbar = () => {
             Approval
             <span
               className={`absolute left-0 bottom-0 h-[2px] bg-indigo-100 transition-all duration-300 ${
-                location.pathname === '/people' ? 'w-full' : 'w-0 group-hover:w-full'
+                location.pathname === '/approval' ? 'w-full' : 'w-0 group-hover:w-full'
               }`}
             ></span>
           </button>
@@ -251,6 +251,7 @@ const Party = () => {
     name: '',
     symbol: '',
   });
+  const navigate = useNavigate();
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
   useEffect(() => {
@@ -282,6 +283,10 @@ const Party = () => {
       setError(
         error.response?.data?.message || 'Failed to fetch parties. Please try again.'
       );
+      if (error.response?.status === 401) {
+        logout();
+        navigate('/login');
+      }
     }
   };
 
@@ -306,23 +311,33 @@ const Party = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!currentParty.name || !currentParty.symbol) {
+      toast.error('All fields are required.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const payload = { name: currentParty.name, symbol: currentParty.symbol };
       const token = Cookies.get('token');
+      if (!token) {
+        throw new Error('No authentication token found.');
+      }
       if (isEdit) {
         await axios.put(`${backendUrl}/party/edit/${currentParty.id}`, payload, {
           withCredentials: true,
           headers: { Authorization: `Bearer ${token}` },
         });
+        toast.success('Party updated successfully.');
       } else {
         await axios.post(`${backendUrl}/party/add`, payload, {
           withCredentials: true,
           headers: { Authorization: `Bearer ${token}` },
         });
+        toast.success('Party added successfully.');
       }
       fetchParties();
       setModalOpen(false);
+      setCurrentParty({ id: null, name: '', symbol: '' });
       setError(null);
     } catch (error) {
       console.error('Error saving party:', error);
@@ -330,6 +345,10 @@ const Party = () => {
         error.response?.data?.message ||
           `Failed to ${isEdit ? 'update' : 'add'} party. Please try again.`
       );
+      if (error.response?.status === 401) {
+        logout();
+        navigate('/login');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -343,12 +362,13 @@ const Party = () => {
     try {
       const token = Cookies.get('token');
       if (!token) {
-        throw new Error('No authentication token found');
+        throw new Error('No authentication token found.');
       }
       await axios.delete(`${backendUrl}/party/${id}`, {
         withCredentials: true,
         headers: { Authorization: `Bearer ${token}` },
       });
+      toast.success('Party deleted successfully.');
       fetchParties();
       setError(null);
     } catch (error) {
@@ -356,6 +376,10 @@ const Party = () => {
       setError(
         error.response?.data?.message || 'Failed to delete party. Please try again.'
       );
+      if (error.response?.status === 401) {
+        logout();
+        navigate('/login');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -369,161 +393,208 @@ const Party = () => {
   };
 
   if (loading) {
-    return <div className="p-4 text-center">Loading...</div>;
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-950">
+        <Navbar />
+        <p className="text-white pt-20">Loading...</p>
+      </div>
+    );
   }
 
   if (!isAuthenticated || user?.userType !== 'admin') {
     return (
-      <div className="p-4 text-center text-red-500">
-        {authError || 'Access denied. Admins only.'}
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-950">
+        <Navbar />
+        <p className="text-red-400 pt-20">{authError || 'Access denied. Admins only.'}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="h-screen flex flex-col bg-slate-950">
       <Navbar />
-      <div className="p-4 bg-white rounded-lg shadow-md max-w-7xl mx-auto mt-20">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold">Party Management</h1>
-        </div>
-        {(error || authError) && (
-          <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
-            {error || authError}
-          </div>
-        )}
-        <nav className="flex space-x-4 mb-6">
-          <button
-            onClick={() => {
-              setView('all');
-              setSortById(false);
-            }}
-            className={`px-4 py-2 rounded ${
-              view === 'all' && !sortById ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            } hover:bg-blue-600 hover:text-white transition-colors cursor-pointer disabled:opacity-50`}
-            disabled={isSubmitting}
-          >
-            All
-          </button>
-          <button
-            onClick={() => {
-              setView('active');
-              setSortById(false);
-            }}
-            className={`px-4 py-2 rounded ${
-              view === 'active' && !sortById ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            } hover:bg-blue-600 hover:text-white transition-colors cursor-pointer disabled:opacity-50`}
-            disabled={isSubmitting}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setSortById((prev) => !prev)}
-            className={`px-4 py-2 rounded ${
-              sortById ? 'bg-blue-500 text-white' : 'bg-gray-200'
-            } hover:bg-blue-600 hover:text-white transition-colors cursor-pointer disabled:opacity-50`}
-            disabled={isSubmitting}
-          >
-            Sort By ID
-          </button>
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2 rounded bg-green-500 text-white ml-auto hover:bg-green-600 transition-colors cursor-pointer disabled:opacity-50"
-            disabled={isSubmitting}
-          >
-            Add Party
-          </button>
-        </nav>
-
-        <table className="w-full border-collapse border border-gray-300">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2 border">Party ID</th>
-              <th className="p-2 border">Name</th>
-              <th className="p-2 border">Symbol</th>
-              <th className="p-2 border">Status</th>
-              <th className="p-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {getDisplayedParties().map((party) => (
-              <tr key={party.id}>
-                <td className="p-2 border">{party.partyId}</td>
-                <td className="p-2 border">{party.name}</td>
-                <td className="p-2 border">{party.symbol}</td>
-                <td className="p-2 border">{party.active ? 'Active' : 'Inactive'}</td>
-                <td className="p-2 border flex space-x-2">
-                  <button
-                    onClick={() => openEditModal(party)}
-                    className="px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors cursor-pointer disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(party.id)}
-                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {modalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-              <h2 className="text-lg font-bold mb-4">
-                {isEdit ? 'Edit Party' : 'Add Party'}
-              </h2>
-              {error && (
-                <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
-                  {error}
-                </div>
-              )}
-              <form onSubmit={handleSubmit}>
-                <input
-                  type="text"
-                  name="name"
-                  value={currentParty.name}
-                  onChange={handleInputChange}
-                  placeholder="Party Name"
-                  className="w-full p-2 mb-3 border border-gray-300 rounded"
-                  required
-                />
-                <input
-                  type="text"
-                  name="symbol"
-                  value={currentParty.symbol}
-                  onChange={handleInputChange}
-                  placeholder="Symbol"
-                  className="w-full p-2 mb-3 border border-gray-300 rounded"
-                  required
-                />
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors cursor-pointer disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors cursor-pointer disabled:opacity-50"
-                    disabled={isSubmitting}
-                  >
-                    {isEdit ? 'Update' : 'Add'}
-                  </button>
-                </div>
-              </form>
+      <div className="flex items-start justify-center pt-20">
+        <div className="bg-slate-900 p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-[900px] text-indigo-300 text-base">
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+            <h2 className="text-2xl sm:text-3xl font-semibold text-white">Party Management</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  setView('all');
+                  setSortById(false);
+                }}
+                className={`px-3 py-1 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  view === 'all' && !sortById
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white'
+                    : 'bg-gray-500 text-white'
+                } ${isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={isSubmitting}
+              >
+                All
+              </button>
+              <button
+                onClick={() => {
+                  setView('active');
+                  setSortById(false);
+                }}
+                className={`px-3 py-1 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  view === 'active' && !sortById
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white'
+                    : 'bg-gray-500 text-white'
+                } ${isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={isSubmitting}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setSortById((prev) => !prev)}
+                className={`px-3 py-1 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  sortById
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white'
+                    : 'bg-gray-500 text-white'
+                } ${isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={isSubmitting}
+              >
+                Sort By ID
+              </button>
+              <button
+                onClick={openAddModal}
+                className={`px-3 py-1 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                  isSubmitting
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer'
+                }`}
+                disabled={isSubmitting}
+              >
+                Add Party
+              </button>
             </div>
           </div>
-        )}
+
+          {(error || authError) && (
+            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded">
+              {error || authError}
+            </div>
+          )}
+
+          {parties.length === 0 ? (
+            <p className="text-center text-gray-400">No parties found.</p>
+          ) : (
+            <div className="w-full">
+              <table className="w-full text-left table-auto">
+                <thead>
+                  <tr className="text-indigo-100">
+                    <th className="p-2 sm:p-4">Party ID</th>
+                    <th className="p-2 sm:p-4">Name</th>
+                    <th className="p-2 sm:p-4">Symbol</th>
+                    <th className="p-2 sm:p-4">Status</th>
+                    <th className="p-2 sm:p-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getDisplayedParties().map((party) => (
+                    <tr key={party.id} className="bg-[#333A5C] border-b border-slate-700">
+                      <td className="p-2 sm:p-4 truncate">{party.partyId}</td>
+                      <td className="p-2 sm:p-4 truncate">{party.name}</td>
+                      <td className="p-2 sm:p-4 truncate">{party.symbol}</td>
+                      <td className="p-2 sm:p-4">{party.active ? 'Active' : 'Inactive'}</td>
+                      <td className="p-2 sm:p-4 flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => openEditModal(party)}
+                          className={`text-indigo-400 underline text-base transition-colors duration-200 hover:text-indigo-200 ${
+                            isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer'
+                          }`}
+                          disabled={isSubmitting}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(party.id)}
+                          className={`px-3 py-1 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                            isSubmitting
+                              ? 'bg-gray-500 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-red-500 to-red-900 text-white cursor-pointer'
+                          }`}
+                          disabled={isSubmitting}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {modalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-slate-900 p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-[500px] text-indigo-300 text-base">
+                <h3 className="text-xl sm:text-2xl font-semibold text-white text-center mb-4">
+                  {isEdit ? 'Edit Party' : 'Add Party'}
+                </h3>
+                {error && (
+                  <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
+                    {error}
+                  </div>
+                )}
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+                    <img src={assets.person_icon} alt="" />
+                    <input
+                      type="text"
+                      name="name"
+                      value={currentParty.name}
+                      onChange={handleInputChange}
+                      placeholder="Party Name"
+                      className="bg-transparent outline-none text-base text-white w-full"
+                      required
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div className="mb-4 flex items-center gap-3 w-full px-5 py-2.5 rounded-full bg-[#333A5C]">
+                    <img src={assets.mail_icon || assets.person_icon} alt="" />
+                    <input
+                      type="text"
+                      name="symbol"
+                      value={currentParty.symbol}
+                      onChange={handleInputChange}
+                      placeholder="Symbol"
+                      className="bg-transparent outline-none text-base text-white w-full"
+                      required
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="submit"
+                      className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                        isSubmitting
+                          ? 'bg-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer'
+                      }`}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (isEdit ? 'Updating...' : 'Adding...') : (isEdit ? 'Update' : 'Add')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
+                        isSubmitting
+                          ? 'bg-gray-500 cursor-not-allowed'
+                          : 'bg-gray-500 text-white cursor-pointer'
+                      }`}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
