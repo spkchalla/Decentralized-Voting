@@ -21,7 +21,7 @@ electionRouter.get("/", getAllElections);
 electionRouter.get("/:id", getElectionById);
 
 // PUT /api/elections/:id - Update election by ID
-electionRouter.put("/update/:id", updateElection);
+electionRouter.patch("/update/:id", updateElection);
 
 // DELETE /api/elections/:id - Delete election by ID
 electionRouter.delete("/:id", deleteElection);
