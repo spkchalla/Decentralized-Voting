@@ -69,79 +69,80 @@ export const getAllElections = async(req, res) =>{
 };
 
 
-// Get election by ID
+export const getElectionById = async (req, res) => {
+    try {
+        const { id } = req.params;
 
-export const getElectionById = async(req, res) =>{
-    try{
-        const {id} = req.params;
-
-        const election = await Election.findOne({eid: id})
+        const election = await Election.findById(id)
             .populate("users", "name email")
             .populate("candidates.candidate", "name")
             .populate("officers", "name email");
 
-        if(!election){
-            return res.status(404).json({message: "Election not found"});
+        if (!election) {
+            return res.status(404).json({ message: "Election not found" });
         }
         res.status(200).json(election);
-    }catch(error){
-        res.status(500).json({message: "Error occured while fetching election"});
+    } catch (error) {
+        res.status(500).json({ message: "Error occurred while fetching election" });
     }
 };
 
 
 // Update election
 
-export const updateElection = async(req, res) =>{
-    try{
-         const {id} = req.params;
-        const {title, description, startDateTime, endDateTime, users, candidates, officers} = req.body;
-        const election = await Election.findOne({eid: id});
-        if(!election){
-            return res.status(404).json({message: "Election NOT Found"});
+export const updateElection = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, startDateTime, endDateTime, users, candidates, officers } = req.body;
+
+        const election = await Election.findById(id);
+        if (!election) {
+            return res.status(404).json({ message: "Election NOT Found" });
         }
-        if(election.status !== "Not Yet Started"){
-            return res.status(400).json({message: "Cannot update active or finished election"});
+        if (election.status !== "Not Yet Started") {
+            return res.status(400).json({ message: "Cannot update active or finished election" });
         }
 
-        if (title) election.title = title;
-        if (description) election.description = description;
+        // Update only provided fields
+        if (title !== undefined) election.title = title;
+        if (description !== undefined) election.description = description;
 
         // Recompute and validate the new start/end dates before assignment
         const nextStartDateTime = startDateTime ?? election.startDateTime;
-        const nextEndDateTime   = endDateTime   ?? election.endDateTime;
+        const nextEndDateTime = endDateTime ?? election.endDateTime;
 
         if (new Date(nextStartDateTime) >= new Date(nextEndDateTime)) {
             return res.status(400).json({ message: "Invalid Dates for Election" });
         }
 
         election.startDateTime = nextStartDateTime;
-        election.endDateTime   = nextEndDateTime;
+        election.endDateTime = nextEndDateTime;
 
-        if (users)      election.users      = users;
-        if (candidates) election.candidates = candidates.map(candidate => ({ candidate, votesCount: 0 }));
-        if (officers)   election.officers   = officers;
-
+        if (users !== undefined) election.users = users;
+        if (candidates !== undefined) election.candidates = candidates.map(candidate => ({ candidate, votesCount: 0 }));
+        if (officers !== undefined) election.officers = officers;
 
         const now = new Date();
-        election.status = now < new Date(election.startDateTime)   ? "Not Yet Started"
-                         : now > new Date(election.endDateTime) ? "Finished"
-                                                                 : "Active";
+        election.status = now < new Date(election.startDateTime) ? "Not Yet Started"
+                        : now > new Date(election.endDateTime) ? "Finished"
+                        : "Active";
 
         await election.save();
-        res.status(200).json({message: "Election updated Successfully", election});
-    }catch(error){
-        res.status(500).json({message: "Error occured while Updating election"});
+        res.status(200).json({ message: "Election updated successfully", election });
+    } catch (error) {
+        res.status(500).json({ message: "Error occurred while updating election" });
     }
 };
 
 
 // Delete Election
 
-export const deleteElection = async (req, res) =>{
-    try{
-        const {id} = req.params;
-        const election = await Election.findOne({eid: id});
+// Delete Election
+
+export const deleteElection = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const election = await Election.findById(id);
         if (!election) {
             return res.status(404).json({ message: "Election not found" });
         }
@@ -153,59 +154,54 @@ export const deleteElection = async (req, res) =>{
 
         await election.deleteOne();
         res.status(200).json({ message: "Election deleted successfully" });
-
-        }catch(error){
-            res.status(500).json({message: "Error occured while deleting Election"});
+    } catch (error) {
+        res.status(500).json({ message: "Error occurred while deleting Election" });
     }
-    
 };
 
 export const getElectionResults = async (req, res) => {
-    try{
+    try {
         const { id } = req.params;
 
-    const election = await Election.findOne({ eid: id })
-        .populate("candidates.candidate", "name");
+        const election = await Election.findById(id)
+            .populate("candidates.candidate", "name");
 
-    if (!election) {
-        return res.status(404).json({ message: "Election not found" });
+        if (!election) {
+            return res.status(404).json({ message: "Election not found" });
+        }
+
+        if (election.status !== "Finished") {
+            return res.status(400).json({ message: "Election results not available yet" });
+        }
+
+        res.status(200).json({
+            election: election.title,
+            results: election.candidates.map(c => ({
+                candidate: c.candidate?.name ?? "Unknown Candidate",
+                votes: c.votesCount
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error occurred while fetching Election Results" });
     }
-
-    if (election.status !== "Finished") {
-        return res.status(400).json({ message: "Election results not available yet" });
-    }
-
-    res.status(200).json({
-        election: election.title,
-        results: election.candidates.map(c => ({
-            candidate: c.candidate?.name ?? "Unknown Candidate",
-            votes: c.votesCount
-        }))
-    });
-
-    }catch(error){
-        res.status(500).json({message: "Error occured while fetching Election Results"});
-    }
-    
 };
 
 export const updateElectionStatus = async (req, res) => {
-    try{
+    try {
         const { id } = req.params;
 
-    const election = await Election.findOne({ eid: id });
-    if (!election) {
-        return res.status(404).json({ message: "Election not found" });
-    }
+        const election = await Election.findById(id);
+        if (!election) {
+            return res.status(404).json({ message: "Election not found" });
+        }
 
-    const now = new Date();
-    election.status = now < new Date(election.startDateTime) ? "Not Yet Started" :
-                      now > new Date(election.endDateTime) ? "Finished" : "Active";
+        const now = new Date();
+        election.status = now < new Date(election.startDateTime) ? "Not Yet Started" :
+                          now > new Date(election.endDateTime) ? "Finished" : "Active";
 
-    await election.save();
-    res.status(200).json({ message: "Election status updated", status: election.status });
-    }catch(error){
-         res.status(500).json({message: "Error occured while Updating Election Status"});
+        await election.save();
+        res.status(200).json({ message: "Election status updated", status: election.status });
+    } catch (error) {
+         res.status(500).json({ message: "Error occurred while Updating Election Status" });
     }
-    
 };
