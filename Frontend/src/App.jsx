@@ -12,6 +12,11 @@ import Navbar from './components/Navbar';
 import PageNotFound from './pages/PageNotFound';
 import Profile from './pages/Profile';
 import Approval from './pages/Approval';
+import Elections from './pages/Elections';
+import Admin from './pages/Admin';
+import Candidate from './pages/Candidate';
+import Party from './pages/Party';
+
 
 const App = () => {
   return (
@@ -27,6 +32,10 @@ const App = () => {
           <Route path="/profile" element={<Profile/>} />
           <Route path = "/*" element = {<PageNotFound/>}/>
           <Route path = "/approval" element = {<Approval/>}/>
+          <Route path = "/elections" element = {<Elections/>}/>
+          <Route path = "/admin" element = {<Admin/>}/>
+          <Route path = "/candidates" element = {<Candidate/>}/>
+          <Route path = "/parties" element = {<Party/>}/>
         </Routes>
       </AuthProvider>
 
