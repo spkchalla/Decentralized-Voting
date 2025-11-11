@@ -1,3 +1,7 @@
+import PinataSDK from "@pinata/sdk";
+import {Vote} from "../Model"
+
+
 export const registerVoter = async (req, res) => {
   try {
     const { pubKeyHash, tokenHash } = req.body;
