@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import bcrypt from "bcrypt";
 
+//HMAC-SHA256
 
 // Generate Random no. for masking.
 export const generateRandomInt = (max = 1000000) => {
@@ -23,21 +23,30 @@ export const maskVote = (candidateID, rand) => {
     }
 };
 
-// To hash token
-export const hashToken = async (token) => {
+// HMAC-SHA256 function to replace bcrypt
+export const hmacSHA256 = (data, secretKey) => {
     try {
-        const saltRounds = 10;
-        return await bcrypt.hash(token, saltRounds);
+        const hmac = crypto.createHmac('sha256', secretKey);
+        hmac.update(data);
+        return hmac.digest('hex');
+    } catch (err) {
+        throw new Error(`hmacSHA256 Error: ${err.message}`);
+    }
+};
+
+// To hash token using HMAC-SHA256
+export const hashToken = async (token, secretKey) => {
+    try {
+        return hmacSHA256(token, secretKey);
     } catch (err) {
         throw new Error(`hashToken Error: ${err.message}`);
     }
 };
 
-// To hash voter Public key
-export const hashVoterPublicKey = async (voterPublicKey) => {
+// To hash voter Public key using HMAC-SHA256
+export const hashVoterPublicKey = async (voterPublicKey, secretKey) => {
     try {
-        const saltRounds = 10;
-        return await bcrypt.hash(voterPublicKey, saltRounds);
+        return hmacSHA256(voterPublicKey, secretKey);
     } catch (err) {
         throw new Error(`hashVoterPublicKey Error: ${err.message}`);
     }
@@ -62,7 +71,6 @@ export const signMaskedVote = async (maskedVote, rand, voterPrivateKeyComponents
         throw new Error(`signMaskedVote Error: ${err.message}`);
     }
 };
-
 
 // Encrypting the details with EC pub key
 export const encryptWithElectionCommissionPublicKey = async (payload, electionCommissionPublicKey) => {
@@ -91,14 +99,18 @@ export const prepareEncryptedVote = async ({
     voterPrivateKeyComponents,
     electionCommissionPublicKey,
     token,
+    hmacSecretKey // New parameter required for HMAC
 }) => {
-
     try {
+        if (!hmacSecretKey) {
+            throw new Error("HMAC secret key is required");
+        }
+
         const rand = await generateRandomInt();
         const masked = await maskVote(candidateId, rand);
         const signed = await signMaskedVote(masked, rand, voterPrivateKeyComponents);
-        const publicKeyHash = await hashVoterPublicKey(voterPublicKey);
-        const tokenHash = await hashToken(token);
+        const publicKeyHash = await hashVoterPublicKey(voterPublicKey, hmacSecretKey);
+        const tokenHash = await hashToken(token, hmacSecretKey);
         const encryptedVote = await encryptWithElectionCommissionPublicKey(
             signed,
             electionCommissionPublicKey
