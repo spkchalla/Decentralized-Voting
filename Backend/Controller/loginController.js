@@ -40,6 +40,21 @@ export const login = async (req, res) => {
 
     // Verify password
     const entity = user || admin;
+    
+    // ✅ CHECK FOR NULL PASSWORD
+    if (!entity.password || entity.password === null) {
+      return res.status(400).json({ 
+        message: "Please set your password. Your account was created without a password. Please use the 'Forgot Password' feature to set a new password." 
+      });
+    }
+
+    // ✅ ENSURE PASSWORD IS STRING
+    if (typeof entity.password !== 'string') {
+      return res.status(500).json({ 
+        message: "Account configuration error. Please contact administrator." 
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, entity.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
