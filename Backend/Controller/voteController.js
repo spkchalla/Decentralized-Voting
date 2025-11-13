@@ -3,7 +3,7 @@ import { prepareEncryptedVote } from "../Utils/voteEncryptionUtil";
 export const castVote = async(req, res)=>{
     try{
         const {
-            candidateID,
+            candidateId,
             voterPublicKey,
             voterPrivateKeyComponents,
             electionCommissionPublicKey,
@@ -11,7 +11,7 @@ export const castVote = async(req, res)=>{
         } = req.body;
 
         const encryptedVoteData = await prepareEncryptedVote({
-            candidateID,
+            candidateId,
             voterPublicKey,
             voterPrivateKeyComponents,
             electionCommissionPublicKey,

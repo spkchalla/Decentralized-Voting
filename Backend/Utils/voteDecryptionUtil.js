@@ -18,9 +18,3 @@ export const decryptWithElectionCommissionPrivateKey = async(encryptedData, elec
 };
 
 // verfying the token and pub key from registration.
-const registrations = await IPFSRegistration.find();
-
-let matchedRecord = null;
-for(const reg of registrations){
-    const tokenMatches = await bcrypt.compare(plainToken)
-}
