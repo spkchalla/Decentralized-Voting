@@ -265,7 +265,7 @@ export const approveUser = asyncHandler(async (req, res) => {
             privateKey: encryptedPrivateKey,
             privateKeyIV,
             privateKeyAuthTag,
-            privateKeySalt: salt,
+            privateKeyDerivationSalt: salt,
             token: encryptedToken,
             tokenIV,
             tokenAuthTag,

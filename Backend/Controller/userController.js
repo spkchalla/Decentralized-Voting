@@ -71,7 +71,7 @@ export const registerUser = async (req, res) => {
             privateKey: encryptedPrivateKey,
             privateKeyIV,
             privateKeyAuthTag,
-            privateKeySalt: salt.toString('hex'),
+            privateKeyDerivationSalt: salt.toString('hex'),
             token: encryptedToken,
             tokenIV,
             tokenAuthTag,
@@ -135,7 +135,7 @@ export const resendOtp = async (req, res) => {
 // Get all voters (only verified)
 export const getAllVoters = async (req, res) => {
     try {
-        const voters = await User.find({ isVerified: true }).select("-password -privateKey -privateKeyIV -privateKeyAuthTag -privateKeySalt -publicKey -publicKeyIV -publicKeyAuthTag -token -tokenIV -tokenAuthTag -otp");
+        const voters = await User.find({ isVerified: true }).select("-password -privateKey -privateKeyIV -privateKeyAuthTag -priv -publicKey -publicKeyIV -publicKeyAuthTag -token -tokenIV -tokenAuthTag -otp");
         res.status(200).json(voters);
     } catch (error) {
         console.error("Fetch voters error:", error);
@@ -147,7 +147,7 @@ export const getAllVoters = async (req, res) => {
 export const getVoterById = async (req, res) => {
     try {
         const { id } = req.params;
-        const voter = await User.findById(id).select("-password -privateKey -privateKeyIV -privateKeyAuthTag -privateKeySalt -publicKey -publicKeyIV -publicKeyAuthTag -token -tokenIV -tokenAuthTag -otp");
+        const voter = await User.findById(id).select("-password -privateKey -privateKeyIV -privateKeyAuthTag -priv -publicKey -publicKeyIV -publicKeyAuthTag -token -tokenIV -tokenAuthTag -otp");
         if (!voter) return res.status(404).json({ message: "Voter not found" });
         res.status(200).json(voter);
     } catch (error) {
@@ -155,3 +155,31 @@ export const getVoterById = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
+// Deriving key for aes algorithm
+export const deriveUserAESKey = async(req, res)=>{
+    try{
+        const {email, password} = req.body;
+        if(!email || !password){
+            return res.status(400).json({message: "Email and password are required"});
+        }
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(404).json({message: "User not found"});
+        }
+
+        const saltHex = user.privateKeyDerivationSalt;
+        if(!saltHex){
+            return res.status(404).json({message: "No salt found for user"});
+        }
+
+        const saltBuffer = Buffer.from(saltHex, "hex");
+
+        const {key: aesKey} = await deriveAESKey(password, saltBuffer);
+
+        res.status(200).json({message: "Key derived successfully", aesKey: aesKey});
+    }catch(err){
+        console.error("Key derivation error:", error.message);
+        return res.status(500).json({ message: `Server error: ${error.message}` });
+    }
+}

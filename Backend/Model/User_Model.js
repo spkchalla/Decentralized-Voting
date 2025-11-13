@@ -43,7 +43,7 @@ const userSchema = new Schema({
         type: String,
         required: true
     },
-    privateKeySalt: {
+    privateKeyDerivationSalt: {
         type: String,
         required: true
     },
