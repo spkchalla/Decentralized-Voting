@@ -9,7 +9,7 @@ import { generateToken } from "../Utils/tokenGeneration.js";
 // Helper: generate unique voter ID using UUID
 const generateVoterId = () => "VOTER-" + randomUUID().slice(0, 8);
 
-// Step 1: Register + send OTP
+// This is not the exact user. PLease go to approvalController this has been deactivated. 
 export const registerUser = async (req, res) => {
     try {
         const { name, email, password } = req.body;

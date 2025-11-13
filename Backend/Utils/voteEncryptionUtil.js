@@ -24,25 +24,6 @@ export const maskVote = (candidateID, rand) => {
     }
 };
 
-// HMAC-SHA256 function to replace bcrypt
-export const hmacSHA256 = (data, secretKey) => {
-    try {
-        const hmac = crypto.createHmac('sha256', secretKey);
-        hmac.update(data);
-        return hmac.digest('hex');
-    } catch (err) {
-        throw new Error(`hmacSHA256 Error: ${err.message}`);
-    }
-};
-
-// To hash token using HMAC-SHA256
-export const hashToken = async (token, secretKey) => {
-    try {
-        return hmacSHA256(token, secretKey);
-    } catch (err) {
-        throw new Error(`hashToken Error: ${err.message}`);
-    }
-};
 
 // To hash voter Public key using HMAC-SHA256
 export const hashVoterPublicKey = async (voterPublicKey, secretKey) => {

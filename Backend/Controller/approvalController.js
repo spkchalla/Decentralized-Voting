@@ -5,9 +5,11 @@ import crypto from "crypto";
 import Approval from "../Model/Approved_Model.js";
 import User from "../Model/User_Model.js";
 import Admin from "../Model/Admin_Model.js";
-import { deriveAESKey, encryptUserData, decryptUserData } from "../Utils/encryptUserData.js";
 import { generateToken } from "../Utils/tokenGeneration.js";
 import { generateRSAKeyPair,  } from "../Utils/rsaKeyGeneration.js";
+import IPFSRegistration_Model from "../Model/IPFSRegistration_Model.js";
+import mongoose from "mongoose";
+import { generateCryptoFields } from "../Utils/encryptUserData.js";
 
 // Helper function to send notification email
 const sendNotificationEmail = async (user, subject, message) => {
@@ -207,57 +209,110 @@ export const getPendingUsers = asyncHandler(async (req, res) => {
 // @route   PUT /api/users/approve/:id
 // @access  Private/Admin
 export const approveUser = asyncHandler(async (req, res) => {
-    const pendingUser = await Approval.findById(req.params.id);
-    if (!pendingUser) {
-        res.status(404).json({message:"Pending user not found"});
-        throw new Error("Pending user not found");
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const pendingUser = await Approval.findById(req.params.id).session(session);
+        if (!pendingUser) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: "Pending user not found" });
+        }
+
+        if (!pendingUser.isVerified) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: "User has not verified their OTP" });
+        }
+
+        // Generate all cryptographic fields and hashes
+        const {
+            encryptedPublicKey,
+            publicKeyIV,
+            publicKeyAuthTag,
+            encryptedPrivateKey,
+            privateKeyIV,
+            privateKeyAuthTag,
+            encryptedToken,
+            tokenIV,
+            tokenAuthTag,
+            salt,
+            tokenHash,
+            publicKeyHash
+        } = await generateCryptoFields(pendingUser.password);
+
+        const voterId = generateVoterId();
+
+        // Create IPFSRegistration record with hashes
+        const ipfsRegistration = new IPFSRegistration_Model({
+            tokenHash,
+            publicKeyHash,
+            hasVoted: false
+        });
+
+        await ipfsRegistration.save({ session });
+
+        // Create new user in User collection with encrypted data
+        const newUser = new User({
+            voterId,
+            name: pendingUser.name,
+            email: pendingUser.email,
+            password: pendingUser.password,
+            publicKey: encryptedPublicKey,
+            publicKeyIV,
+            publicKeyAuthTag,
+            privateKey: encryptedPrivateKey,
+            privateKeyIV,
+            privateKeyAuthTag,
+            privateKeySalt: salt,
+            token: encryptedToken,
+            tokenIV,
+            tokenAuthTag,
+            isVerified: true,
+            pincode: pendingUser.pincode,
+        });
+
+        await newUser.save({ session });
+
+        // Update pending user status
+        pendingUser.status = "Accepted";
+        await pendingUser.save({ session });
+
+        // Commit transaction
+        await session.commitTransaction();
+        session.endSession();
+
+        // ✅ Send approval notification email
+        try {
+            await sendNotificationEmail(
+                pendingUser, // Pass the pendingUser object directly
+                "Account Approval Notification",
+                `Dear ${pendingUser.name}, Your profile has been approved and you can login now. Your Voter ID is: <b>${voterId}</b>`
+            );
+        } catch (emailError) {
+            console.error('Notification email failed:', emailError);
+            // Don't fail the request if email fails
+        }
+
+        res.json({ 
+            message: "User approved and notified",
+            voterId: voterId 
+        });
+
+    } catch (error) {
+        // Proper transaction handling
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        session.endSession();
+        
+        console.error('Approval transaction failed:', error);
+        res.status(500).json({ 
+            message: "User approval failed", 
+            error: error.message 
+        });
     }
-
-    if (!pendingUser.isVerified) {
-        res.status(400).json({message:"User has not verified their OTP"});
-        throw new Error("User has not verified their OTP");
-    }
-
-    // Generate cryptographic fields
-    const { publicKey, privateKey } = await generateRSAKeyPair();
-    const voterId = generateVoterId();
-    const token = generateToken(); // Generates a 48-byte token in hex
-    const { key: aesKey, salt } = await deriveAESKey(pendingUser.password);
-    const { encryptedUserData: encryptedPrivateKey, iv: privateKeyIV, authTag: privateKeyAuthTag } = encryptUserData(privateKey, aesKey);
-    const { encryptedUserData: encryptedPublicKey, iv: publicKeyIV, authTag: publicKeyAuthTag } = encryptUserData(publicKey, aesKey);
-    const { encryptedUserData: encryptedToken, iv: tokenIV, authTag: tokenAuthTag } = encryptUserData(token, aesKey);
-
-    // Create new user in User collection
-    const newUser = new User({
-        voterId,
-        name: pendingUser.name,
-        email: pendingUser.email,
-        password: pendingUser.password,
-        publicKey: encryptedPublicKey,
-        publicKeyIV,
-        publicKeyAuthTag,
-        privateKey: encryptedPrivateKey,
-        privateKeyIV,
-        privateKeyAuthTag,
-        privateKeySalt: salt.toString('hex'),
-        token: encryptedToken,
-        tokenIV,
-        tokenAuthTag,
-        isVerified: true,
-        pincode: pendingUser.pincode,
-    });
-
-    await newUser.save();
-    pendingUser.status = "Accepted";
-    await pendingUser.save();
-
-    await sendNotificationEmail(
-        newUser,
-        "Account Approval Notification",
-        `Dear ${newUser.name}, Your profile has been Approved.`
-    );
-
-    res.json({ message: "User approved and notified" });
 });
 
 // @desc    Reject user (Admin only)
