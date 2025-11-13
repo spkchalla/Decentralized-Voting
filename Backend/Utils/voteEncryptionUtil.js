@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import crypto, { publicDecrypt } from "crypto";
 import { deriveAESKey, decryptUserData } from "./encryptUserData";
 
 //HMAC-SHA256
@@ -47,6 +47,12 @@ export const hashToken = async (token, secretKey) => {
 // To hash voter Public key using HMAC-SHA256
 export const hashVoterPublicKey = async (voterPublicKey, secretKey) => {
     try {
+        const voterPublicKey = decryptUserData(
+            encryptedVoterPublicKey,
+            aesKey,
+            publicKey
+            
+        )
         return hmacSHA256(voterPublicKey, secretKey);
     } catch (err) {
         throw new Error(`hashVoterPublicKey Error: ${err.message}`);
@@ -93,6 +99,7 @@ export const signMaskedVote = async({
             encryptedPrivateKey,
             aesKey,
             privateKeyIV,
+            privateKeyAuthTag,
         );
         const maskedBuffer = Buffer.from(String(maskedVote), "utf8");
 
