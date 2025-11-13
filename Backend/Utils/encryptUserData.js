@@ -7,6 +7,36 @@ const AES_IV_LENGTH = 12;
 // Generate IV
 const generateIV = () => crypto.randomBytes(AES_IV_LENGTH);
 
+// RSA Key Pair Generation (MISSING FUNCTION)
+export const generateRSAKeyPair = () => {
+    return new Promise((resolve, reject) => {
+        crypto.generateKeyPair('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+                type: 'spki',
+                format: 'pem'
+            },
+            privateKeyEncoding: {
+                type: 'pkcs8',
+                format: 'pem'
+            }
+        }, (err, publicKey, privateKey) => {
+            if (err) reject(err);
+            resolve({ publicKey, privateKey });
+        });
+    });
+};
+
+// Token Generation (MISSING FUNCTION)
+export const generateToken = () => {
+    return crypto.randomBytes(48).toString('hex'); // 96-character hex token
+};
+
+// Voter ID Generation (MISSING FUNCTION)
+export const generateVoterId = () => {
+    return 'V' + crypto.randomBytes(8).toString('hex').toUpperCase();
+};
+
 // Derive AES key from password using Argon2id
 export const deriveAESKey = async (password, salt = null) => {
     try {
@@ -35,11 +65,11 @@ export const deriveAESKey = async (password, salt = null) => {
     }
 };
 
-// Encrypt user data (public key, private key, token, etc.)
+// Encrypt user data
 export const encryptUserData = (data, aesKey) => {
     try {
         if (typeof data !== 'string') {
-            throw new Error('Data must be a string (e.g., JSON-serialized)');
+            throw new Error('Data must be a string');
         }
         if (!Buffer.isBuffer(aesKey) || aesKey.length !== 32) {
             throw new Error('AES key must be a 32-byte Buffer');
@@ -61,30 +91,81 @@ export const encryptUserData = (data, aesKey) => {
     }
 };
 
-// Decrypt user data
-export const decryptUserData = (encryptedUserData, aesKey, ivHex, authTagHex) => {
+// HMAC-SHA256 function
+export const hmacSHA256 = (data, secretKey) => {
     try {
-        if (!Buffer.isBuffer(aesKey) || aesKey.length !== 32) {
-            throw new Error('AES key must be a 32-byte Buffer');
-        }
-        if (typeof encryptedUserData !== 'string' || typeof ivHex !== 'string' || typeof authTagHex !== 'string') {
-            throw new Error('Encrypted data, IV, and auth tag must be strings');
-        }
-        if (ivHex.length !== AES_IV_LENGTH * 2) {
-            throw new Error(`IV must be ${AES_IV_LENGTH} bytes in hex format`);
-        }
-        if (authTagHex.length !== 32) { // AES-GCM auth tag is 16 bytes (32 hex chars)
-            throw new Error('Auth tag must be 16 bytes in hex format');
-        }
+        const hmac = crypto.createHmac('sha256', secretKey);
+        hmac.update(data);
+        return hmac.digest('hex');
+    } catch (err) {
+        throw new Error(`hmacSHA256 Error: ${err.message}`);
+    }
+};
 
-        const iv = Buffer.from(ivHex, 'hex');
-        const authTag = Buffer.from(authTagHex, 'hex');
-        const decipher = crypto.createDecipheriv(AES_ALGO, aesKey, iv);
-        decipher.setAuthTag(authTag);
-        let decrypted = decipher.update(encryptedUserData, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
+// Hash token using HMAC-SHA256
+export const hashToken = (token) => {
+    try {
+        const secretKey = process.env.HMAC_SECRET_KEY;
+        if (!secretKey) {
+            throw new Error('HMAC_SECRET_KEY not found in environment variables');
+        }
+        return hmacSHA256(token, secretKey);
+    } catch (err) {
+        throw new Error(`hashToken Error: ${err.message}`);
+    }
+};
+
+// Hash public key using SHA-256
+export const hashPublicKey = (publicKey) => {
+    try {
+        return crypto.createHash('sha256').update(publicKey).digest('hex');
+    } catch (err) {
+        throw new Error(`hashPublicKey Error: ${err.message}`);
+    }
+};
+
+// Generate cryptographic fields (SECURITY FIXED)
+export const generateCryptoFields = async (password) => {
+    try {
+        // Step 1: Generate original cryptographic materials
+        const { publicKey, privateKey } = await generateRSAKeyPair();
+        const token = generateToken();
+        
+        // Step 2: Derive AES key from user's password
+        const { key: aesKey, salt } = await deriveAESKey(password);
+        
+        // Step 3: Encrypt all sensitive data with AES key
+        const { encryptedUserData: encryptedPrivateKey, iv: privateKeyIV, authTag: privateKeyAuthTag } = 
+            encryptUserData(privateKey, aesKey);
+        const { encryptedUserData: encryptedPublicKey, iv: publicKeyIV, authTag: publicKeyAuthTag } = 
+            encryptUserData(publicKey, aesKey);
+        const { encryptedUserData: encryptedToken, iv: tokenIV, authTag: tokenAuthTag } = 
+            encryptUserData(token, aesKey);
+        
+        // Step 4: Generate hashes for IPFSRegistration
+        const tokenHash = hashToken(token);
+        const publicKeyHash = hashPublicKey(publicKey);
+
+        // ✅ SECURITY FIX: Only return what's needed for storage
+        return {
+            // For User Model (Encrypted)
+            encryptedPublicKey,
+            publicKeyIV, 
+            publicKeyAuthTag,
+            encryptedPrivateKey,
+            privateKeyIV,
+            privateKeyAuthTag, 
+            encryptedToken,
+            tokenIV,
+            tokenAuthTag,
+            salt: salt.toString('hex'),
+            
+            // For IPFSRegistration Model (Hashed)
+            tokenHash,
+            publicKeyHash
+        };
+        
     } catch (error) {
-        throw new Error(`Decryption failed: ${error.message}`);
+        throw new Error(`Crypto fields generation failed: ${error.message}`);
     }
 };
