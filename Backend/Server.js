@@ -8,6 +8,7 @@ import PartyRouter from "./Route/Party_Routes.js";
 import CandidateRouter from "./Route/Candidate_Routes.js";
 import ApprovalRouter from "./Route/Approval_Route.js";
 import electionRouter from "./Route/Election_Routes.js";
+import ipfsRouter from "./Route/Ipfs_Routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +56,8 @@ app.use(
 app.use(
     '/election', electionRouter
 )
+
+app.use('/ipfs', ipfsRouter);
 
 app.listen(PORT,() =>{
     console.log(`Server started at ${PORT}`)
