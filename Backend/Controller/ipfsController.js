@@ -1,87 +1,74 @@
-import axios from "axios";
-import dotenv from "dotenv";
-import { Vote } from "../Model/IPFSRegistration_Model.js";
+// controller/ipfsController.js
+import { uploadToIPFS, fetchFromIPFS } from "../Utils/ipfsUtils.js";
 
-dotenv.config();
-
-const PINATA_JWT = process.env.PINATA_JWT;
-const GATEWAY = process.env.PINATA_GATEWAY;
-
-// -------- Register Voter --------
-export const registerVoter = async (req, res) => {
+// --- Register Voter ---
+export const registerVoterOnIPFS = async (req, res) => {
   try {
     const { pubKeyHash, tokenHash } = req.body;
-    const ipfsData = { pubKeyHash, tokenHash };
 
-    // Upload JSON to Pinata using JWT
-    const response = await axios.post(
-      "https://api.pinata.cloud/pinning/pinJSONToIPFS",
-      ipfsData,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: PINATA_JWT,
-        },
-      }
-    );
+    if (!pubKeyHash || !tokenHash) {
+      return res.status(400).json({
+        success: false,
+        message: "pubKeyHash and tokenHash are required",
+      });
+    }
 
-    const cid = response.data.IpfsHash;
-    const url = `${GATEWAY}/ipfs/${cid}`;
+    const payload = { pubKeyHash, tokenHash };
+    const fileName = `registration.json`;
 
-    // await RegistrationCID.create({ cid, pubKeyHash });
+    const { IpfsHash, url } = await uploadToIPFS(payload, fileName);
 
-    res.json({
-      success: true,
-      message: "Voter registration uploaded to IPFS successfully",
-      cid,
+    res.status(201).json({
+      message: "Voter registration pinned to IPFS successfully",
+      cid: IpfsHash,
       url,
     });
   } catch (error) {
-    console.error(
-      "IPFS registration error:",
-      error.response?.data || error.message
-    );
-    res.status(500).json({
-      success: false,
-      error: "IPFS upload failed",
-    });
+    console.error("Error in registerVoterOnIPFS:", error.message);
+    res.status(500).json({ message: "Failed to register voter to IPFS" });
   }
 };
 
-// -------- Send Vote to IPFS --------
-export const sendVoteToIpfs = async (req, res) => {
+// --- Send Vote to IPFS ---
+export const sendVoteToIPFS = async (req, res) => {
   try {
-    const { cand_id, voterpubkey, pub_key_hash, token } = req.body;
-    const ipfsData = { cand_id, voterpubkey, pub_key_hash, token };
+    const { encryptedVote, signedVote, encryptedVoterPublicKey, tokenHash } =
+      req.body;
 
-    // Upload JSON to Pinata using JWT
-    const response = await axios.post(
-      "https://api.pinata.cloud/pinning/pinJSONToIPFS",
-      ipfsData,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: PINATA_JWT,
-        },
-      }
-    );
+    if (!encryptedVote || !encryptedVoterPublicKey || !tokenHash) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "encryptedVote, encryptedVoterPublicKey, and tokenHash are required",
+      });
+    }
 
-    const cid = response.data.IpfsHash;
-    const url = `${GATEWAY}/ipfs/${cid}`;
+    const payload = { encryptedVote, signedVote, encryptedVoterPublicKey, tokenHash };
+    const fileName = `vote.json`;
 
-    // await VoteCID.create({ cid, pub_key_hash });
+    const { IpfsHash, url } = await uploadToIPFS(payload, fileName);
 
-    res.json({
-      success: true,
-      message: "Vote uploaded to IPFS successfully",
-      cid,
+    res.status(201).json({
+      message: "Vote pinned to IPFS successfully",
+      cid: IpfsHash,
       url,
     });
   } catch (error) {
-    console.error("Vote upload error:", error.response?.data || error.message);
-    res.status(500).json({
-      success: false,
-      error: "Vote upload failed",
-    });
+    console.error("Error in sendVoteToIPFS:", error.message);
+    res.status(500).json({ message: "Failed to send vote to IPFS" });
+  }
+};
+
+// --- Fetch from IPFS ---
+export const fetchDataFromIPFS = async (req, res) => {
+  try {
+    const { cid } = req.params;
+    if (!cid) return res.status(400).json({ message: "CID required" });
+
+    const { data } = await fetchFromIPFS(cid);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Error fetching from IPFS:", error.message);
+    res.status(500).json({ message: "Failed to fetch from IPFS" });
   }
 };

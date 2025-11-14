@@ -90,12 +90,12 @@ export const signMaskedVote = async({
             saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
         });
         
-        const signedPayload = {
+        const signedVote = {
             maskedVote,
             rand,
             signature: signature.toString("base64"),
         };
-        return signedPayload;
+        return signedVote;
     }catch(err){
         throw new Error(`signedMaskedVote Error: ${err.message}`);
     }
@@ -142,7 +142,7 @@ export const prepareEncryptedVote = async ({
 
         const rand = await generateRandomInt();
         const masked = await maskVote(candidateId, rand);
-        const signed = await signMaskedVote({
+        const signedVote = await signMaskedVote({
             maskedVote: masked,
             rand,
             encryptedPrivateKey,
@@ -154,7 +154,7 @@ export const prepareEncryptedVote = async ({
         //const publicKeyHash = await hashVoterPublicKey(voterPublicKey, hmacSecretKey);
         const tokenHash = await hashToken(token, hmacSecretKey);
         const encryptedVote = await encryptWithElectionCommissionPublicKey(
-            signed,
+            masked,
             electionCommissionPublicKey
         );
         const encryptedVoterPublicKey = await encryptWithElectionCommissionPublicKey(
@@ -163,6 +163,7 @@ export const prepareEncryptedVote = async ({
         );
         return {
             encryptedVote,
+            signedVote,
             encryptedVoterPublicKey,
             //publicKeyHash,
             tokenHash,
