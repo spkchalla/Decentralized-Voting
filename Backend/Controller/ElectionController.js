@@ -1,207 +1,254 @@
-import Election from "../Model/Election_Model.js";
-
-
-// Create Election
-
-export const createElection = async(req, res) =>{
-
-    try{
-        const  { eid, title, description, startDateTime, endDateTime, users, candidates, officers } = req.body;
-    if(!eid || !title || !startDateTime || !endDateTime){
-        return res.status(400).json({message: "Missing required fields"});
-    }
-
-    if(new Date(startDateTime) >= new Date(endDateTime)){
-        return res.status(400).json({message: "Invalid Dates for Election"});
-    }
-
-    const existingElection = await Election.findOne({eid});
-    if(existingElection){
-        return res.status(400).json({message: "Election ID already exists"});
-    }
-
-    const now = new Date();
-    const status = now < new Date(startDateTime) ? "Not Yet Started": 
-                        now > new Date(endDateTime) ? "Finished" : "Active";
-
-    const election = new Election({
-        eid,
-        title,
-        description,
-        startDateTime,
-        endDateTime,
-        users,
-        candidates: candidates.map(candidate => ({ candidate, votesCount: 0 })),
-        officers,
-        status
-    });
-
-    await election.save();
-    res.status(201).json({message: "Election created Successfully", election});
-    }catch(error){
-        console.error("Error in creating election: ", error);
-        res.status(500).json({ message: "Error creating election", error: error.message });
-    }
-    
-};
+import Election from '../Model/Election_Model.js';
+import { generateRSAKeyPair,     generateToken, 
+    deriveAESKey, 
+    encryptUserData} from '../Utils/encryptUserData.js';
+import User from '../Model/User_Model.js';
+import Candidate from '../Model/Candidate_Model.js';
+import bcrypt from 'bcryptjs';
 
 
 
-
-// Get all elections
-
-
-export const getAllElections = async(req, res) =>{
-    try{
-        const {status} = req.query;
-        const query = status ? {status} : {}; // done so that if the elections are done or upcoming.
-        const elections = await Election.find(query)
-            .populate("users", "name email")
-            .populate("candidates.candidate", "name")
-            .populate("officers", "name email")
-            .sort({createdAt: -1});
-        const total = await Election.countDocuments(query);
-
-        res.status(200).json({ elections, total });
-    }catch(error){
-        res.status(500).json({messaage: "Error occured fetching all elections"});
-    }
-};
-
-
-export const getElectionById = async (req, res) => {
+export const createElection = async (req, res) => {
     try {
-        const { id } = req.params;
+        const {
+            title,
+            description,
+            startDateTime,
+            endDateTime,
+            officers = [],
+            password,
+            pinCodes, // PIN codes to search for users
+            candidates = []  // Array of candidate IDs
+        } = req.body;
 
-        const election = await Election.findById(id)
-            .populate("users", "name email")
-            .populate("candidates.candidate", "name")
-            .populate("officers", "name email");
-
-        if (!election) {
-            return res.status(404).json({ message: "Election not found" });
-        }
-        res.status(200).json(election);
-    } catch (error) {
-        res.status(500).json({ message: "Error occurred while fetching election" });
-    }
-};
-
-
-// Update election
-
-export const updateElection = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { title, description, startDateTime, endDateTime, users, candidates, officers } = req.body;
-
-        const election = await Election.findById(id);
-        if (!election) {
-            return res.status(404).json({ message: "Election NOT Found" });
-        }
-        if (election.status !== "Not Yet Started") {
-            return res.status(400).json({ message: "Cannot update active or finished election" });
+        // Validate required fields
+        if (!title || !startDateTime || !endDateTime || !password || !pinCodes) {
+            return res.status(400).json({
+                success: false,
+                message: 'Title, startDateTime, endDateTime, password, and pinCodes are required'
+            });
         }
 
-        // Update only provided fields
-        if (title !== undefined) election.title = title;
-        if (description !== undefined) election.description = description;
-
-        // Recompute and validate the new start/end dates before assignment
-        const nextStartDateTime = startDateTime ?? election.startDateTime;
-        const nextEndDateTime = endDateTime ?? election.endDateTime;
-
-        if (new Date(nextStartDateTime) >= new Date(nextEndDateTime)) {
-            return res.status(400).json({ message: "Invalid Dates for Election" });
+        // Validate password strength
+        if (password.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 8 characters long'
+            });
         }
 
-        election.startDateTime = nextStartDateTime;
-        election.endDateTime = nextEndDateTime;
+        // Validate PIN codes - should be an array
+        if (!Array.isArray(pinCodes) || pinCodes.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'pinCodes must be a non-empty array'
+            });
+        }
 
-        if (users !== undefined) election.users = users;
-        if (candidates !== undefined) election.candidates = candidates.map(candidate => ({ candidate, votesCount: 0 }));
-        if (officers !== undefined) election.officers = officers;
+        // Validate candidates - should be an array
+        if (!Array.isArray(candidates)) {
+            return res.status(400).json({
+                success: false,
+                message: 'candidates must be an array'
+            });
+        }
 
+        // Validate dates
+        const startDate = new Date(startDateTime);
+        const endDate = new Date(endDateTime);
         const now = new Date();
-        election.status = now < new Date(election.startDateTime) ? "Not Yet Started"
-                        : now > new Date(election.endDateTime) ? "Finished"
-                        : "Active";
 
-        await election.save();
-        res.status(200).json({ message: "Election updated successfully", election });
-    } catch (error) {
-        res.status(500).json({ message: "Error occurred while updating election" });
-    }
-};
-
-
-// Delete Election
-
-// Delete Election
-
-export const deleteElection = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const election = await Election.findById(id);
-        if (!election) {
-            return res.status(404).json({ message: "Election not found" });
+        if (startDate >= endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'End date must be after start date'
+            });
         }
 
-        // Optional: Restrict deletion for active or finished elections
-        if (election.status !== "Not Yet Started") {
-            return res.status(400).json({ message: "Cannot delete active or finished election" });
+        if (startDate < now) {
+            return res.status(400).json({
+                success: false,
+                message: 'Start date cannot be in the past'
+            });
         }
 
-        await election.deleteOne();
-        res.status(200).json({ message: "Election deleted successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Error occurred while deleting Election" });
-    }
-};
-
-export const getElectionResults = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const election = await Election.findById(id)
-            .populate("candidates.candidate", "name");
-
-        if (!election) {
-            return res.status(404).json({ message: "Election not found" });
+        // Step 1: Search for users by pincode
+        const users = await User.find({ pincode: { $in: pinCodes } }).select('_id');
+        
+        if (users.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No users found with the provided pincodes'
+            });
         }
 
-        if (election.status !== "Finished") {
-            return res.status(400).json({ message: "Election results not available yet" });
+        // Format users for election schema
+        const formattedUsers = users.map(user => ({
+            user: user._id,
+            isAccepted: false // Default to false
+        }));
+
+        // Step 2: Hash the password using bcrypt
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Step 3: Generate Election Commission RSA Key Pair
+        const { publicKey, privateKey } = await generateRSAKeyPair();
+        
+        // Step 4: Generate token for the election
+        const token = generateToken();
+
+        // Step 5: Derive AES key from the provided password
+        const { key: aesKey, salt } = await deriveAESKey(password);
+
+        // Step 6: Encrypt only token, public key, and private key
+        const encryptedPublicKeyData = encryptUserData(publicKey, aesKey);
+        const encryptedPrivateKeyData = encryptUserData(privateKey, aesKey);
+        const encryptedTokenData = encryptUserData(token, aesKey);
+
+        // Step 7: Generate unique election ID
+        const eid = `ELE${Date.now()}${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
+
+        // Step 8: Determine initial status
+        let status = "Not Yet Started";
+        if (startDate <= now && endDate > now) {
+            status = "Active";
         }
 
-        res.status(200).json({
-            election: election.title,
-            results: election.candidates.map(c => ({
-                candidate: c.candidate?.name ?? "Unknown Candidate",
-                votes: c.votesCount
-            }))
+        // Step 9: Create the election document first to get its ID
+        const election = new Election({
+            eid,
+            title,
+            description,
+            startDateTime: startDate,
+            endDateTime: endDate,
+            officers,
+            status,
+            // Encrypted data only
+            ecPublicKey: encryptedPublicKeyData.encryptedUserData,
+            ecPublicKeyIV: encryptedPublicKeyData.iv,
+            ecPublicKeyAuthTag: encryptedPublicKeyData.authTag,
+            ecPrivateKey: encryptedPrivateKeyData.encryptedUserData,
+            ecPrivateKeyIV: encryptedPrivateKeyData.iv,
+            ecPrivateKeyAuthTag: encryptedPrivateKeyData.authTag,
+            ecprivateKeyDerivationSalt: salt.toString('hex'),
+            // PIN codes
+            pinCodes,
+            // Users found by pincode
+            users: formattedUsers,
+            candidates: [], // Initialize empty, will update after candidate processing
+            // Hashed password
+            password: hashedPassword
         });
-    } catch (error) {
-        res.status(500).json({ message: "Error occurred while fetching Election Results" });
-    }
-};
 
-export const updateElectionStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
+        // Step 10: Save election to get the _id
+        await election.save();
 
-        const election = await Election.findById(id);
-        if (!election) {
-            return res.status(404).json({ message: "Election not found" });
+        // Step 11: Process candidates and update their records
+        const formattedCandidates = [];
+        
+        for (const candidateData of candidates) {
+            let candidate;
+            
+            if (typeof candidateData === 'string') {
+                // If candidateData is a string (candidate ID)
+                candidate = await Candidate.findById(candidateData);
+            } else if (candidateData.candidate_id) {
+                // If candidateData is an object with candidate_id
+                candidate = await Candidate.findOne({ candidate_id: candidateData.candidate_id });
+            } else if (candidateData._id) {
+                // If candidateData is an object with _id
+                candidate = await Candidate.findById(candidateData._id);
+            }
+
+            if (candidate) {
+                // Add candidate to election with votesCount
+                formattedCandidates.push({
+                    candidate: candidate._id,
+                    votesCount: 0
+                });
+
+                // Update candidate's elections array
+                const electionPartyData = {
+                    election_id: election._id,
+                    party_id: candidateData.party_id || candidate.party // Use provided party_id or candidate's current party
+                };
+
+                // Add to elections array if not already present
+                const existingElection = candidate.elections.find(
+                    e => e.election_id.toString() === election._id.toString()
+                );
+
+                if (!existingElection) {
+                    candidate.elections.push(electionPartyData);
+                }
+
+                // Add to currentElection if not already present
+                if (!candidate.currentElection.includes(election._id)) {
+                    candidate.currentElection.push(election._id);
+                }
+
+                await candidate.save();
+            }
         }
 
-        const now = new Date();
-        election.status = now < new Date(election.startDateTime) ? "Not Yet Started" :
-                          now > new Date(election.endDateTime) ? "Finished" : "Active";
-
+        // Step 12: Update election with formatted candidates
+        election.candidates = formattedCandidates;
         await election.save();
-        res.status(200).json({ message: "Election status updated", status: election.status });
+
+        // Step 13: Populate the election data for response
+        const populatedElection = await Election.findById(election._id)
+            .populate('officers', 'name email')
+            .populate('users.user', 'voterId name email pincode')
+            .populate('candidates.candidate', 'candidate_id name')
+            .select('-password -ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt');
+
+        // Step 14: Prepare response
+        const response = {
+            success: true,
+            message: 'Election created successfully',
+            election: {
+                eid: populatedElection.eid,
+                title: populatedElection.title,
+                description: populatedElection.description,
+                startDateTime: populatedElection.startDateTime,
+                endDateTime: populatedElection.endDateTime,
+                status: populatedElection.status,
+                officers: populatedElection.officers,
+                users: populatedElection.users,
+                candidates: populatedElection.candidates,
+                pinCodes: populatedElection.pinCodes,
+                createdAt: populatedElection.createdAt
+            },
+            temporaryToken: token,
+            usersFound: users.length
+        };
+
+        return res.status(201).json(response);
+
     } catch (error) {
-         res.status(500).json({ message: "Error occurred while Updating Election Status" });
+        console.error('Election creation error:', error);
+        
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: 'Election with this ID already exists'
+            });
+        }
+
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };

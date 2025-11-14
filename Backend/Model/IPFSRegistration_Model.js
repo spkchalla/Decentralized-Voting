@@ -18,6 +18,10 @@ const ipfsRegistrationSchema = new mongoose.Schema({
         type: Boolean,
         required: true,
         default: false,
+    },
+    election:{
+        type:mongoose.Schema.ObjectId,
+        ref:'Election'
     }
 });
 export default mongoose.model("IPFSRegistration", ipfsRegistrationSchema);
