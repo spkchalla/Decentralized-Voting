@@ -67,10 +67,6 @@ const userSchema = new Schema({
         code: { type: String },
         expiresAt: { type: Date }
     },
-    pastElections: [{
-        eid: { type: mongoose.Schema.Types.ObjectId, ref: "Election" },
-        hasVoted: { type: Boolean, default: false }
-    }],
     pincode:{
         type:Number,
         requred:true

@@ -1,5 +1,16 @@
 import mongoose, { Schema } from "mongoose";
 
+const userSubSchema = new Schema({
+    user: {
+        type: mongoose.Schema.ObjectId,
+        ref: "User"
+    },
+    isAccepted: {
+        type: Boolean,
+        default: false
+    }
+});
+
 const electionSchema = new Schema({
     eid: {
         type: String,
@@ -21,10 +32,7 @@ const electionSchema = new Schema({
         type: Date,
         required: true
     },
-    users: [{
-        type: mongoose.Schema.ObjectId,
-        ref: "User"
-    }],
+    users: [userSubSchema],
     candidates: [{
         candidate: { type: mongoose.Schema.ObjectId, ref: "Candidate" },
         votesCount: { type: Number, default: 0 }
@@ -37,6 +45,45 @@ const electionSchema = new Schema({
         type: String,
         enum: ["Active", "Not Yet Started", "Finished"],
         default: "Not Yet Started"
+    },
+    // Election commission public key
+    ecPublicKey:{
+        type:String,
+        required:true
+    },
+    ecPublicKeyIV:{
+        type:String,
+        required:true
+    },
+    ecPublicKeyAuthTag:{
+        type:String,
+        required:true
+    },
+    // Election commission private key
+    ecPrivateKey:{
+        type:String,
+        required:true
+    },
+    ecPrivateKeyIV:{
+        type:String,
+        required:true
+    },
+    ecPrivateKeyAuthTag:{
+        type:String,
+        required:true
+    },
+    ecprivateKeyDerivationSalt:{
+        type:String,
+        required:true
+    },
+    pinCodes:[{
+        type:Number,
+        required:true
+    }],
+    // Hashed password field
+    password:{
+        type:String,
+        required:true
     }
 }, { timestamps: true });
 
