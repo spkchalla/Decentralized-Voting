@@ -1,12 +1,11 @@
 import Election from '../Model/Election_Model.js';
-import { generateRSAKeyPair,     generateToken, 
-    deriveAESKey, 
-    encryptUserData} from '../Utils/encryptUserData.js';
+import { generateRSAKeyPair, generateToken, deriveAESKey, encryptUserData } from '../Utils/encryptUserData.js';
 import User from '../Model/User_Model.js';
 import Candidate from '../Model/Candidate_Model.js';
+import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
 import bcrypt from 'bcryptjs';
-
-
+import { uploadToIPFS } from '../Utils/ipfsUtils.js';
+import crypto from 'crypto';
 
 export const createElection = async (req, res) => {
     try {
@@ -17,11 +16,13 @@ export const createElection = async (req, res) => {
             endDateTime,
             officers = [],
             password,
-            pinCodes, // PIN codes to search for users
-            candidates = []  // Array of candidate IDs
+            pinCodes,
+            candidates = []
         } = req.body;
 
-        // Validate required fields
+        // -------------------------
+        // 1. VALIDATION
+        // -------------------------
         if (!title || !startDateTime || !endDateTime || !password || !pinCodes) {
             return res.status(400).json({
                 success: false,
@@ -29,7 +30,6 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Validate password strength
         if (password.length < 8) {
             return res.status(400).json({
                 success: false,
@@ -37,7 +37,6 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Validate PIN codes - should be an array
         if (!Array.isArray(pinCodes) || pinCodes.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -45,7 +44,6 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Validate candidates - should be an array
         if (!Array.isArray(candidates)) {
             return res.status(400).json({
                 success: false,
@@ -53,7 +51,6 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Validate dates
         const startDate = new Date(startDateTime);
         const endDate = new Date(endDateTime);
         const now = new Date();
@@ -72,9 +69,12 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Step 1: Search for users by pincode
-        const users = await User.find({ pincode: { $in: pinCodes } }).select('_id');
-        
+        // -------------------------
+        // 2. FIND USERS BY PINCODE
+        // -------------------------
+        const users = await User.find({ pincode: { $in: pinCodes } })
+            .select('_id voterId name email pincode');
+
         if (users.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -82,40 +82,46 @@ export const createElection = async (req, res) => {
             });
         }
 
-        // Format users for election schema
         const formattedUsers = users.map(user => ({
             user: user._id,
-            isAccepted: false // Default to false
+            isAccepted: false
         }));
 
-        // Step 2: Hash the password using bcrypt
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        // -------------------------
+        // 3. HASH ELECTION PASSWORD
+        // -------------------------
+        const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Step 3: Generate Election Commission RSA Key Pair
+        // -------------------------
+        // 4. GENERATE RSA KEYS
+        // -------------------------
         const { publicKey, privateKey } = await generateRSAKeyPair();
-        
-        // Step 4: Generate token for the election
-        const token = generateToken();
 
-        // Step 5: Derive AES key from the provided password
+        // -------------------------
+        // 5. CREATE TOKEN + AES KEY
+        // -------------------------
+        const token = generateToken();
         const { key: aesKey, salt } = await deriveAESKey(password);
 
-        // Step 6: Encrypt only token, public key, and private key
-        const encryptedPublicKeyData = encryptUserData(publicKey, aesKey);
-        const encryptedPrivateKeyData = encryptUserData(privateKey, aesKey);
-        const encryptedTokenData = encryptUserData(token, aesKey);
+        // Hash token and public key for IPFSRegistration
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const publicKeyHash = crypto.createHash('sha256').update(publicKey).digest('hex');
 
-        // Step 7: Generate unique election ID
+        const encryptedPublicKey = encryptUserData(publicKey, aesKey);
+        const encryptedPrivateKey = encryptUserData(privateKey, aesKey);
+        const encryptedToken = encryptUserData(token, aesKey);
+
+        // -------------------------
+        // 6. CREATE ELECTION ID
+        // -------------------------
         const eid = `ELE${Date.now()}${Math.random().toString(36).substr(2, 9)}`.toUpperCase();
 
-        // Step 8: Determine initial status
         let status = "Not Yet Started";
-        if (startDate <= now && endDate > now) {
-            status = "Active";
-        }
+        if (startDate <= now && endDate > now) status = "Active";
 
-        // Step 9: Create the election document first to get its ID
+        // -------------------------
+        // 7. CREATE BASE ELECTION
+        // -------------------------
         const election = new Election({
             eid,
             title,
@@ -124,66 +130,104 @@ export const createElection = async (req, res) => {
             endDateTime: endDate,
             officers,
             status,
-            // Encrypted data only
-            ecPublicKey: encryptedPublicKeyData.encryptedUserData,
-            ecPublicKeyIV: encryptedPublicKeyData.iv,
-            ecPublicKeyAuthTag: encryptedPublicKeyData.authTag,
-            ecPrivateKey: encryptedPrivateKeyData.encryptedUserData,
-            ecPrivateKeyIV: encryptedPrivateKeyData.iv,
-            ecPrivateKeyAuthTag: encryptedPrivateKeyData.authTag,
-            ecprivateKeyDerivationSalt: salt.toString('hex'),
-            // PIN codes
+            ecPublicKey: encryptedPublicKey.encryptedUserData,
+            ecPublicKeyIV: encryptedPublicKey.iv,
+            ecPublicKeyAuthTag: encryptedPublicKey.authTag,
+            ecPrivateKey: encryptedPrivateKey.encryptedUserData,
+            ecPrivateKeyIV: encryptedPrivateKey.iv,
+            ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,
+            ecprivateKeyDerivationSalt: salt.toString("hex"),
             pinCodes,
-            // Users found by pincode
             users: formattedUsers,
-            candidates: [], // Initialize empty, will update after candidate processing
-            // Hashed password
+            candidates: [],
             password: hashedPassword
         });
 
-        // Step 10: Save election to get the _id
         await election.save();
 
-        // Step 11: Process candidates and update their records
+        // -------------------------
+        // 8. CREATE IPFS REGISTRATION FOR EACH USER
+        // -------------------------
+        const ipfsUploadResults = [];
+
+        for (const user of users) {
+            try {
+                // Create unique hashes for each user to avoid duplicate constraints
+                const userSpecificTokenHash = crypto.createHash('sha256').update(token + user._id.toString()).digest('hex');
+                const userSpecificPublicKeyHash = crypto.createHash('sha256').update(publicKey + user._id.toString()).digest('hex');
+
+                // Create IPFSRegistration document
+                const registration = new IPFSRegistration({
+                    tokenHash: userSpecificTokenHash,
+                    publicKeyHash: userSpecificPublicKeyHash,
+                    hasVoted: false,
+                    election: election._id
+                });
+
+                await registration.save();
+
+                // Upload to IPFS - Only tokenHash, publicKeyHash, and eid
+                const ipfsData = {
+                    tokenHash: userSpecificTokenHash,
+                    publicKeyHash: userSpecificPublicKeyHash,
+                    eid: eid
+                };
+
+                const ipfsResult = await uploadToIPFS(ipfsData, `registration`);
+
+                // Update IPFSRegistration with IPFS data
+                registration.ipfsHash = ipfsResult.IpfsHash;
+                registration.ipfsUrl = ipfsResult.url;
+                await registration.save();
+
+                ipfsUploadResults.push({
+                    userId: user._id,
+                    success: true,
+                    ipfsHash: ipfsResult.IpfsHash,
+                    url: ipfsResult.url,
+                    registrationId: registration._id
+                });
+
+            } catch (err) {
+                ipfsUploadResults.push({
+                    userId: user._id,
+                    success: false,
+                    error: err.message
+                });
+            }
+        }
+
+        // -------------------------
+        // 9. PROCESS CANDIDATES
+        // -------------------------
         const formattedCandidates = [];
-        
-        for (const candidateData of candidates) {
-            let candidate;
-            
-            if (typeof candidateData === 'string') {
-                // If candidateData is a string (candidate ID)
-                candidate = await Candidate.findById(candidateData);
-            } else if (candidateData.candidate_id) {
-                // If candidateData is an object with candidate_id
-                candidate = await Candidate.findOne({ candidate_id: candidateData.candidate_id });
-            } else if (candidateData._id) {
-                // If candidateData is an object with _id
-                candidate = await Candidate.findById(candidateData._id);
+
+        for (const cand of candidates) {
+            let candidate = null;
+
+            if (typeof cand === "string") {
+                candidate = await Candidate.findById(cand);
+            } else if (cand._id) {
+                candidate = await Candidate.findById(cand._id);
+            } else if (cand.candidate_id) {
+                candidate = await Candidate.findOne({ candidate_id: cand.candidate_id });
             }
 
             if (candidate) {
-                // Add candidate to election with votesCount
                 formattedCandidates.push({
                     candidate: candidate._id,
                     votesCount: 0
                 });
 
-                // Update candidate's elections array
                 const electionPartyData = {
                     election_id: election._id,
-                    party_id: candidateData.party_id || candidate.party // Use provided party_id or candidate's current party
+                    party_id: cand.party_id || candidate.party
                 };
 
-                // Add to elections array if not already present
-                const existingElection = candidate.elections.find(
-                    e => e.election_id.toString() === election._id.toString()
-                );
-
-                if (!existingElection) {
+                if (!candidate.elections.some(e => e.election_id.toString() === election._id.toString())) {
                     candidate.elections.push(electionPartyData);
                 }
 
-                // Add to currentElection if not already present
                 if (!candidate.currentElection.includes(election._id)) {
                     candidate.currentElection.push(election._id);
                 }
@@ -192,63 +236,39 @@ export const createElection = async (req, res) => {
             }
         }
 
-        // Step 12: Update election with formatted candidates
         election.candidates = formattedCandidates;
         await election.save();
 
-        // Step 13: Populate the election data for response
+        // -------------------------
+        // 10. POPULATE AND RESPOND
+        // -------------------------
         const populatedElection = await Election.findById(election._id)
             .populate('officers', 'name email')
             .populate('users.user', 'voterId name email pincode')
             .populate('candidates.candidate', 'candidate_id name')
             .select('-password -ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt');
 
-        // Step 14: Prepare response
-        const response = {
+        return res.status(201).json({
             success: true,
-            message: 'Election created successfully',
-            election: {
-                eid: populatedElection.eid,
-                title: populatedElection.title,
-                description: populatedElection.description,
-                startDateTime: populatedElection.startDateTime,
-                endDateTime: populatedElection.endDateTime,
-                status: populatedElection.status,
-                officers: populatedElection.officers,
-                users: populatedElection.users,
-                candidates: populatedElection.candidates,
-                pinCodes: populatedElection.pinCodes,
-                createdAt: populatedElection.createdAt
-            },
+            message: "Election created successfully",
+            election: populatedElection,
             temporaryToken: token,
-            usersFound: users.length
-        };
-
-        return res.status(201).json(response);
+            usersFound: users.length,
+            ipfsUploadSummary: {
+                totalUsers: users.length,
+                successfulUploads: ipfsUploadResults.filter(r => r.success).length,
+                failedUploads: ipfsUploadResults.filter(r => !r.success).length,
+                results: ipfsUploadResults
+            }
+        });
 
     } catch (error) {
-        console.error('Election creation error:', error);
-        
-        if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Election with this ID already exists'
-            });
-        }
-
-        if (error.name === 'ValidationError') {
-            const errors = Object.values(error.errors).map(err => err.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Validation error',
-                errors
-            });
-        }
+        console.error("Election creation error:", error);
 
         return res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
         });
     }
 };

@@ -10,6 +10,7 @@ import { generateRSAKeyPair,  } from "../Utils/rsaKeyGeneration.js";
 import IPFSRegistration_Model from "../Model/IPFSRegistration_Model.js";
 import mongoose from "mongoose";
 import { generateCryptoFields } from "../Utils/encryptUserData.js";
+import { uploadToIPFS } from "../Utils/ipfsUtils.js";
 
 // Helper function to send notification email
 const sendNotificationEmail = async (user, subject, message) => {
@@ -237,21 +238,10 @@ export const approveUser = asyncHandler(async (req, res) => {
             encryptedToken,
             tokenIV,
             tokenAuthTag,
-            salt,
-            tokenHash,
-            publicKeyHash
+            salt
         } = await generateCryptoFields(pendingUser.password);
 
         const voterId = generateVoterId();
-
-        // Create IPFSRegistration record with hashes
-        const ipfsRegistration = new IPFSRegistration_Model({
-            tokenHash,
-            publicKeyHash,
-            hasVoted: false
-        });
-
-        await ipfsRegistration.save({ session });
 
         // Create new user in User collection with encrypted data
         const newUser = new User({
@@ -270,7 +260,8 @@ export const approveUser = asyncHandler(async (req, res) => {
             tokenIV,
             tokenAuthTag,
             isVerified: true,
-            pincode: pendingUser.pincode,
+            pincode: pendingUser.pincode
+            // Removed ipfsHash field
         });
 
         await newUser.save({ session });
@@ -286,7 +277,7 @@ export const approveUser = asyncHandler(async (req, res) => {
         // ✅ Send approval notification email
         try {
             await sendNotificationEmail(
-                pendingUser, // Pass the pendingUser object directly
+                pendingUser,
                 "Account Approval Notification",
                 `Dear ${pendingUser.name}, Your profile has been approved and you can login now. Your Voter ID is: <b>${voterId}</b>`
             );
@@ -297,7 +288,8 @@ export const approveUser = asyncHandler(async (req, res) => {
 
         res.json({ 
             message: "User approved and notified",
-            voterId: voterId 
+            voterId: voterId
+            // Removed ipfsHash and ipfsUrl from response
         });
 
     } catch (error) {
@@ -314,7 +306,6 @@ export const approveUser = asyncHandler(async (req, res) => {
         });
     }
 });
-
 // @desc    Reject user (Admin only)
 // @route   DELETE /api/users/reject/:id
 // @access  Private/Admin
