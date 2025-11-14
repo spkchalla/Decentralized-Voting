@@ -6,6 +6,7 @@ dotenv.config();
 
 const PINATA_JWT = process.env.PINATA_JWT;
 const GATEWAY = process.env.PINATA_GATEWAY;
+const IPFS_API = process.env.IPFS_API;
 
 /**
  * Upload JSON data to IPFS via Pinata
@@ -15,7 +16,7 @@ const GATEWAY = process.env.PINATA_GATEWAY;
 export const uploadToIPFS = async (jsonData, name = "unnamed-file") => {
   try {
     const response = await axios.post(
-      "https://api.pinata.cloud/pinning/pinJSONToIPFS",
+      IPFS_API,
       {
         pinataMetadata: {
           name, // custom name for Pinata dashboard
