@@ -32,18 +32,16 @@ export const registerVoterOnIPFS = async (req, res) => {
 // --- Send Vote to IPFS ---
 export const sendVoteToIPFS = async (req, res) => {
   try {
-    const { encryptedVote, signedVote, encryptedVoterPublicKey, tokenHash } =
-      req.body;
+    const { encryptedVote, signedVote, tokenHash, voterPublicKey } = req.body;
 
-    if (!encryptedVote || !encryptedVoterPublicKey || !tokenHash) {
+    if (!encryptedVote || !tokenHash || !voterPublicKey) {
       return res.status(400).json({
         success: false,
-        message:
-          "encryptedVote, encryptedVoterPublicKey, and tokenHash are required",
+        message: "encryptedVote, voterPublicKey, and tokenHash are required",
       });
     }
 
-    const payload = { encryptedVote, signedVote, encryptedVoterPublicKey, tokenHash };
+    const payload = { encryptedVote, signedVote, voterPublicKey, tokenHash };
     const fileName = `vote.json`;
 
     const { IpfsHash, url } = await uploadToIPFS(payload, fileName);

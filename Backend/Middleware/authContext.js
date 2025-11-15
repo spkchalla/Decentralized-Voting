@@ -13,7 +13,13 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.userId).select("-password");
 
-      next(); // Continue to route
+      // If user not found (e.g., account deleted), treat as unauthorized
+      if (!req.user) {
+        console.error('Auth middleware: user not found for token payload', decoded);
+        return res.status(401).json({ message: 'Not authorized, user not found' });
+      }
+
+      return next(); // Continue to route
     } catch (err) {
       console.error("JWT verification failed:", err);
       return res.status(401).json({ message: "Not authorized, token failed" });
