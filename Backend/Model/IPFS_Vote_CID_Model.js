@@ -1,5 +1,5 @@
 import mongoose, { mongo } from "mongoose";
-import {Election} from "./Election_Model";
+//import {Election} from "./Election_Model.js";
 
 const ipfsVoteCIDSchema = new mongoose.Schema({
     cid:{

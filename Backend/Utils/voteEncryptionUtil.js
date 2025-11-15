@@ -1,174 +1,243 @@
-import crypto, { publicDecrypt } from "crypto";
-import { deriveAESKey, decryptUserData } from "./encryptUserData";
+import crypto from "crypto";
+import { deriveAESKey } from "./encryptUserData.js";
+const AES_ALGO = "aes-256-gcm";
 
-//HMAC-SHA256
+// HMAC-SHA256
+export const hmacSHA256 = (data, secretKey) => {
+  try {
+    const hmac = crypto.createHmac("sha256", secretKey);
+    hmac.update(data);
+    return hmac.digest("hex");
+  } catch (err) {
+    throw new Error(`hmacSHA256 Error: ${err.message}`);
+  }
+};
 
 // Generate Random no. for masking.
 export const generateRandomInt = (max = 1000000) => {
-    try {
-        return crypto.randomInt(1, max);
-    } catch (err) {
-        throw new Error(`generateRandomInt Error: ${err.message}`);
-    }
+  try {
+    return crypto.randomInt(1, max);
+  } catch (err) {
+    throw new Error(`generateRandomInt Error: ${err.message}`);
+  }
 };
 
 // Mask the candidate Id with the random number
 export const maskVote = (candidateID, rand) => {
-    try {
-        if (!Number.isInteger(candidateID) || !Number.isInteger(rand)) {
-            throw new Error("candidateID and rand must be INTEGERS!!");
-        }
-        return candidateID ^ rand;
-    } catch (err) {
-        throw new Error(`maskVote Error: ${err.message}`);
+  try {
+    if (!Number.isInteger(candidateID) || !Number.isInteger(rand)) {
+      throw new Error("candidateID and rand must be INTEGERS!!");
     }
+    return candidateID ^ rand;
+  } catch (err) {
+    throw new Error(`maskVote Error: ${err.message}`);
+  }
 };
 
-
-// To hash voter Public key using HMAC-SHA256
-export const hashVoterPublicKey = async (voterPublicKey, secretKey) => {
-    try {
-        const voterPublicKey = decryptUserData(
-            encryptedVoterPublicKey,
-            aesKey,
-            publicKey
-            
-        )
-        return hmacSHA256(voterPublicKey, secretKey);
-    } catch (err) {
-        throw new Error(`hashVoterPublicKey Error: ${err.message}`);
+// Add this decrypt function to voteEncryptionUtil.js
+export const decryptUserData = (encryptedData, aesKey, iv, authTag) => {
+  try {
+    if (!Buffer.isBuffer(aesKey) || aesKey.length !== 32) {
+      throw new Error("AES key must be a 32-byte Buffer");
     }
-};
-//-------------------------------------------------------------------------------------//
 
-// Signing Vote (the masked one) along with rand
-// export const signMaskedVote = async (maskedVote, rand, voterPrivateKeyComponents) => {
-//     try {
-//         const { d, n } = voterPrivateKeyComponents;
+    const decipher = crypto.createDecipheriv(
+      AES_ALGO,
+      aesKey,
+      Buffer.from(iv, "hex")
+    );
+    decipher.setAuthTag(Buffer.from(authTag, "hex"));
 
-//         const combinedMaskedVote = `${maskedVote}:${rand}`;
-//         const combinedBigInt = BigInt("0x" + Buffer.from(combinedMaskedVote).toString("hex"));
+    let decrypted = decipher.update(encryptedData, "hex", "utf8");
+    decrypted += decipher.final("utf8");
 
-//         const signedVote = combinedBigInt ** BigInt(d) % BigInt(n);
-
-//         return {
-//             maskedVote,
-//             rand,
-//             signedMaskedVote: signedVote.toString(),
-//         };
-//     } catch (err) {
-//         throw new Error(`signMaskedVote Error: ${err.message}`);
-//     }
-// };
-
-//-------------------------------------------------------------------------------------//
-
-//sign masked vote with voter's private key (pem)
-export const signMaskedVote = async({
-    maskedVote,
-    rand,
-    encryptedPrivateKey,
-    privateKeyIV,
-    privateKeySalt,
-    password,
-}) =>{
-    try{
-        const saltBuffer = Buffer.from(privateKeySalt, "hex");
-        const { key: aesKey } = await deriveAESKey(password, saltBuffer);
-
-        const decryptedPrivatePEM = decryptUserData(
-            encryptedPrivateKey,
-            aesKey,
-            privateKeyIV,
-            privateKeyAuthTag,
-        );
-        const maskedBuffer = Buffer.from(String(maskedVote), "utf8");
-
-        const signature = crypto.sign("sha256", maskedBuffer, {
-            key: decryptedPrivatePEM,
-            padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-            saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
-        });
-        
-        const signedVote = {
-            maskedVote,
-            rand,
-            signature: signature.toString("base64"),
-        };
-        return signedVote;
-    }catch(err){
-        throw new Error(`signedMaskedVote Error: ${err.message}`);
-    }
+    return decrypted;
+  } catch (error) {
+    throw new Error(`Decryption failed: ${error.message}`);
+  }
 };
 
-
-// Encrypting the details with EC pub key
-export const encryptWithElectionCommissionPublicKey = async (payload, electionCommissionPublicKey) => {
-    try {
-        const buffer = Buffer.from(JSON.stringify(payload));
-
-        const encrypted = crypto.publicEncrypt(
-            {
-                key: electionCommissionPublicKey,
-                padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-                oaepHash: "sha256",
-            },
-            buffer
-        );
-
-        return encrypted.toString("base64");
-    } catch (err) {
-        throw new Error(`encryptWithElectionCommissionPublicKey Error: ${err.message}`);
-    }
-};
-
-// Preparing the complete payload of the encrypted vote along with peripherals
-export const prepareEncryptedVote = async ({
-    candidateId,
-    voterPublicKey,
-    encryptedPrivateKey,
-    privateKeyIV,
-    privateKeyAuthTag,
-    privateKeySalt,
-    password,
-    electionCommissionPublicKey,
-    token,
-    hmacSecretKey // New parameter required for HMAC
+// Sign masked vote with voter's private key (pem)
+export const signMaskedVote = async ({
+  maskedVote,
+  encryptedPrivateKey,
+  privateKeyIV,
+  privateKeyAuthTag,
+  privateKeySalt,
+  password,
 }) => {
-    try {
-        if (!hmacSecretKey) {
-            throw new Error("HMAC secret key is required");
-        }
+  try {
+    const saltBuffer = Buffer.from(privateKeySalt, "hex");
+    const { key: aesKey } = await deriveAESKey(password, saltBuffer);
 
-        const rand = await generateRandomInt();
-        const masked = await maskVote(candidateId, rand);
-        const signedVote = await signMaskedVote({
-            maskedVote: masked,
-            rand,
-            encryptedPrivateKey,
-            privateKeyIV,
-            privateKeyAuthTag,
-            privateKeySalt,
-            password,
-        });
-        //const publicKeyHash = await hashVoterPublicKey(voterPublicKey, hmacSecretKey);
-        const tokenHash = await hashToken(token, hmacSecretKey);
-        const encryptedVote = await encryptWithElectionCommissionPublicKey(
-            masked,
-            electionCommissionPublicKey
-        );
-        const encryptedVoterPublicKey = await encryptWithElectionCommissionPublicKey(
-            voterPublicKey,
-            electionCommissionPublicKey
-        );
-        return {
-            encryptedVote,
-            signedVote,
-            encryptedVoterPublicKey,
-            //publicKeyHash,
-            tokenHash,
-        };
-    } catch (err) {
-        throw new Error(`prepareEncryptedVote Error: ${err.message}`);
+    const decryptedPrivatePEM = decryptUserData(
+      encryptedPrivateKey,
+      aesKey,
+      privateKeyIV,
+      privateKeyAuthTag
+    );
+    
+    const maskedVoteBuffer = Buffer.from(String(maskedVote), "utf8");
+    
+    const signature = crypto.sign("sha256", maskedVoteBuffer, {
+      key: decryptedPrivatePEM,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
+    });
+
+    return signature.toString("base64"); // Just the signature string
+  } catch (err) {
+    throw new Error(`signMaskedVote Error: ${err.message}`);
+  }
+};
+
+// Hash token function
+export const hashToken = async (token, secretKey) => {
+  try {
+    return hmacSHA256(token, secretKey);
+  } catch (err) {
+    throw new Error(`hashToken Error: ${err.message}`);
+  }
+};
+
+// Encrypting the details with Election Commission public key
+export const encryptWithElectionCommissionPublicKey = async (
+  payload,
+  electionCommissionPublicKey
+) => {
+  try {
+    // Validate that electionCommissionPublicKey is provided
+    if (!electionCommissionPublicKey) {
+      throw new Error("electionCommissionPublicKey is required");
     }
+
+    // Convert payload to JSON string and buffer
+    const buffer = Buffer.from(JSON.stringify(payload));
+
+    // Handle if public key is base64 encoded, convert to PEM format
+    let publicKeyForEncryption = electionCommissionPublicKey;
+    if (typeof electionCommissionPublicKey === 'string') {
+      // Check if it's already in PEM format
+      if (!electionCommissionPublicKey.includes('-----BEGIN')) {
+        // If it looks like base64 or hex, try to convert it
+        // Assume it's base64 encoded DER format and convert to PEM
+        try {
+          const keyBuffer = Buffer.from(electionCommissionPublicKey, 'base64');
+          publicKeyForEncryption = `-----BEGIN PUBLIC KEY-----\n${keyBuffer.toString('base64').match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----`;
+        } catch (conversionError) {
+          // If conversion fails, use as-is and let crypto.publicEncrypt handle the error
+          publicKeyForEncryption = electionCommissionPublicKey;
+        }
+      }
+    }
+
+    const encrypted = crypto.publicEncrypt(
+      {
+        key: publicKeyForEncryption,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256",
+      },
+      buffer
+    );
+
+    return encrypted.toString("base64");
+  } catch (err) {
+    throw new Error(
+      `encryptWithElectionCommissionPublicKey Error: ${err.message}`
+    );
+  }
+};
+
+// In voteEncryptionUtil.js - update the prepareEncryptedVote function
+export const prepareEncryptedVote = async ({
+  candidateId,
+  encryptedVoterPublicKey,
+  publicKeyIV,
+  publicKeyAuthTag,
+  encryptedPrivateKey,
+  privateKeyIV,
+  privateKeyAuthTag,
+  privateKeySalt,
+  password,
+  electionCommissionPublicKey,
+  encryptedToken,
+  tokenIV,
+  tokenAuthTag,
+  hmacSecretKey,
+}) => {
+  try {
+    if (!hmacSecretKey) {
+      throw new Error("HMAC secret key is required");
+    }
+
+    // Step 0: Derive AES key using Argon2
+    const saltBuffer = Buffer.from(privateKeySalt, "hex");
+    const { key: aesKey } = await deriveAESKey(password, saltBuffer);
+
+    // Step 1: Decrypt the voter's public key
+    const voterPublicKey = decryptUserData(
+      encryptedVoterPublicKey,
+      aesKey,
+      publicKeyIV,
+      publicKeyAuthTag
+    );
+
+    // Step 2: Decrypt the token
+    const decryptedToken = decryptUserData(
+      encryptedToken,
+      aesKey,
+      tokenIV,
+      tokenAuthTag
+    );
+
+    // Step 3: Generate random number and mask the vote
+    const rand = generateRandomInt();
+    const maskedVote = maskVote(candidateId, rand);
+
+    // Step 4: Sign the masked vote (just the masked vote number, not JSON)
+    const decryptedPrivatePEM = decryptUserData(
+      encryptedPrivateKey,
+      aesKey,
+      privateKeyIV,
+      privateKeyAuthTag
+    );
+    
+    const maskedVoteBuffer = Buffer.from(String(maskedVote), "utf8");
+    const signature = crypto.sign("sha256", maskedVoteBuffer, {
+      key: decryptedPrivatePEM,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
+    });
+
+    // Step 5: Hash the decrypted token
+    const tokenHash = hashToken(decryptedToken, hmacSecretKey);
+
+    // Step 6: Encrypt the masked vote AND random together as JSON object
+    const votePayload = {
+      maskedVote: maskedVote,
+      rand: rand
+    };
+    
+    const encryptedVote = await encryptWithElectionCommissionPublicKey(
+      votePayload, // This gets encrypted as JSON
+      electionCommissionPublicKey
+    );
+
+    // Step 7: Encrypt the voter's public key with election commission public key
+    const encryptedVoterPublicKeyForIPFS =
+      await encryptWithElectionCommissionPublicKey(
+        voterPublicKey,
+        electionCommissionPublicKey
+      );
+
+    // Return the four required components in the correct format
+    return {
+      encryptedVote,           // 1. encrypted JSON containing {maskedVote, rand}
+      signedVote: signature.toString("base64"), // 2. signature string only (not JSON)
+      encryptedVoterPublicKey: encryptedVoterPublicKeyForIPFS, // 3. encrypted voter public key
+      tokenHash,               // 4. hashed token of user
+    };
+  } catch (err) {
+    throw new Error(`prepareEncryptedVote Error: ${err.message}`);
+  }
 };
