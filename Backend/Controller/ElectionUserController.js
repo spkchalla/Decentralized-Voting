@@ -385,7 +385,7 @@ export const getElectionDetails = async (req, res) => {
 
         // Check if user is part of this election
         const userData = election.users.find(
-            userEntry => userEntry.user._id.toString() === userId
+            userEntry => userEntry.user && userEntry.user._id && userEntry.user._id.toString() === userId.toString()
         );
 
         if (!userData) {
