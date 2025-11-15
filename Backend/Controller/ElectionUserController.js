@@ -56,8 +56,8 @@ export const getUserElectionDashboard = async (req, res) => {
                 if (userEntry.user && userEntry.user._id) {
                     return userEntry.user._id.toString() === userId;
                 }
-                // If population failed, check the raw ObjectId
-                return userEntry.user.toString() === userId;
+                // If population failed, check the raw ObjectId (only if user is not null)
+                return userEntry.user && userEntry.user.toString() === userId;
             });
 
             console.log(`Dashboard - Election ${election._id}:`, {

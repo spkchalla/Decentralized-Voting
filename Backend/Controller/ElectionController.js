@@ -1,5 +1,5 @@
 import Election from '../Model/Election_Model.js';
-import { generateRSAKeyPair, generateToken, deriveAESKey, encryptUserData } from '../Utils/encryptUserData.js';
+import { generateRSAKeyPair, generateToken, deriveAESKey, encryptUserData, generateCryptoFields } from '../Utils/encryptUserData.js';
 import User from '../Model/User_Model.js';
 import Candidate from '../Model/Candidate_Model.js';
 import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
@@ -130,9 +130,7 @@ export const createElection = async (req, res) => {
             endDateTime: endDate,
             officers,
             status,
-            ecPublicKey: encryptedPublicKey.encryptedUserData,
-            ecPublicKeyIV: encryptedPublicKey.iv,
-            ecPublicKeyAuthTag: encryptedPublicKey.authTag,
+            ecPublicKey: publicKey,
             ecPrivateKey: encryptedPrivateKey.encryptedUserData,
             ecPrivateKeyIV: encryptedPrivateKey.iv,
             ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,

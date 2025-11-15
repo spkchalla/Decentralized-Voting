@@ -51,14 +51,6 @@ const electionSchema = new Schema({
         type:String,
         required:true
     },
-    ecPublicKeyIV:{
-        type:String,
-        required:true
-    },
-    ecPublicKeyAuthTag:{
-        type:String,
-        required:true
-    },
     // Election commission private key
     ecPrivateKey:{
         type:String,
