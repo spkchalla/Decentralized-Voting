@@ -1,5 +1,5 @@
 import Election from '../Model/Election_Model.js';
-import { generateRSAKeyPair, generateToken, deriveAESKey, encryptUserData, generateCryptoFields } from '../Utils/encryptUserData.js';
+import { generateRSAKeyPair, generateToken, deriveAESKey, encryptUserData, hashToken, hashPublicKey } from '../Utils/encryptUserData.js';
 import User from '../Model/User_Model.js';
 import Candidate from '../Model/Candidate_Model.js';
 import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
@@ -93,9 +93,16 @@ export const createElection = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 12);
 
         // -------------------------
-        // 4. GENERATE RSA KEYS
+        // 4. GENERATE RSA KEYS AND STRIP PEM HEADERS
         // -------------------------
         const { publicKey, privateKey } = await generateRSAKeyPair();
+
+        // Strip PEM headers from public key for cleaner storage
+        const cleanPublicKey = publicKey
+            .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+            .replace(/-----END PUBLIC KEY-----/g, '')
+            .replace(/\n/g, '')
+            .trim();
 
         // -------------------------
         // 5. CREATE TOKEN + AES KEY
@@ -103,11 +110,10 @@ export const createElection = async (req, res) => {
         const token = generateToken();
         const { key: aesKey, salt } = await deriveAESKey(password);
 
-        // Hash token and public key for IPFSRegistration
-        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const publicKeyHash = crypto.createHash('sha256').update(publicKey).digest('hex');
+        // Use the imported utility functions instead of recreating
+        const tokenHash = hashToken(token);
+        const publicKeyHash = hashPublicKey(cleanPublicKey);
 
-        const encryptedPublicKey = encryptUserData(publicKey, aesKey);
         const encryptedPrivateKey = encryptUserData(privateKey, aesKey);
         const encryptedToken = encryptUserData(token, aesKey);
 
@@ -130,7 +136,7 @@ export const createElection = async (req, res) => {
             endDateTime: endDate,
             officers,
             status,
-            ecPublicKey: publicKey,
+            ecPublicKey: cleanPublicKey, // Store without PEM headers
             ecPrivateKey: encryptedPrivateKey.encryptedUserData,
             ecPrivateKeyIV: encryptedPrivateKey.iv,
             ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,
@@ -151,8 +157,9 @@ export const createElection = async (req, res) => {
         for (const user of users) {
             try {
                 // Create unique hashes for each user to avoid duplicate constraints
-                const userSpecificTokenHash = crypto.createHash('sha256').update(token + user._id.toString()).digest('hex');
-                const userSpecificPublicKeyHash = crypto.createHash('sha256').update(publicKey + user._id.toString()).digest('hex');
+                // Use the imported hash functions with user-specific data
+                const userSpecificTokenHash = hashToken(token + user._id.toString());
+                const userSpecificPublicKeyHash = hashPublicKey(cleanPublicKey + user._id.toString());
 
                 // Create IPFSRegistration document
                 const registration = new IPFSRegistration({
