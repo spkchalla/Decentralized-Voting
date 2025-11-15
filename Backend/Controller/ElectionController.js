@@ -156,10 +156,11 @@ export const createElection = async (req, res) => {
 
         for (const user of users) {
             try {
-                // Create unique hashes for each user to avoid duplicate constraints
-                // Use the imported hash functions with user-specific data
-                const userSpecificTokenHash = hashToken(token + user._id.toString());
-                const userSpecificPublicKeyHash = hashPublicKey(cleanPublicKey + user._id.toString());
+                // Hash the plain token and public key for registration.
+                // Note: this uses the plain (not encrypted) values and does NOT append the user ID.
+                // If you need per-user-unique hashes, consider including userId deliberately.
+                const userSpecificTokenHash = hashToken(token);
+                const userSpecificPublicKeyHash = hashPublicKey(cleanPublicKey);
 
                 // Create IPFSRegistration document
                 const registration = new IPFSRegistration({

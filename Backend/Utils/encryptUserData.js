@@ -115,10 +115,14 @@ export const hashToken = (token) => {
     }
 };
 
-// Hash public key using SHA-256
+// Hash public key using HMAC-SHA256 (server-side secret)
 export const hashPublicKey = (publicKey) => {
     try {
-        return crypto.createHash('sha256').update(publicKey).digest('hex');
+        const secretKey = process.env.HMAC_SECRET_KEY;
+        if (!secretKey) {
+            throw new Error('HMAC_SECRET_KEY not found in environment variables');
+        }
+        return hmacSHA256(publicKey, secretKey);
     } catch (err) {
         throw new Error(`hashPublicKey Error: ${err.message}`);
     }
