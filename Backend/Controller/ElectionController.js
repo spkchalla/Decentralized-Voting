@@ -97,7 +97,7 @@ export const createElection = async (req, res) => {
         // -------------------------
         const { publicKey, privateKey } = await generateRSAKeyPair();
 
-        // Strip PEM headers from public key for cleaner storage
+        // Keep full PEM public key for compatibility with crypto APIs
         const cleanPublicKey = publicKey
             .replace(/-----BEGIN PUBLIC KEY-----/g, '')
             .replace(/-----END PUBLIC KEY-----/g, '')
@@ -136,7 +136,7 @@ export const createElection = async (req, res) => {
             endDateTime: endDate,
             officers,
             status,
-            ecPublicKey: cleanPublicKey, // Store without PEM headers
+            ecPublicKey: publicKey, // Store full PEM for direct use by crypto
             ecPrivateKey: encryptedPrivateKey.encryptedUserData,
             ecPrivateKeyIV: encryptedPrivateKey.iv,
             ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,

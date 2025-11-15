@@ -9,6 +9,15 @@ import { generateCryptoFields } from '../Utils/encryptUserData.js';
 // Get user's election dashboard
 export const getUserElectionDashboard = async (req, res) => {
     try {
+        // Defensive: ensure middleware attached a valid user
+        if (!req.user) {
+            console.error('getUserElectionDashboard: no user attached to request');
+            return res.status(401).json({
+                success: false,
+                message: 'Not authorized, no user found on request'
+            });
+        }
+
         const userId = req.user._id;
         console.log('Dashboard - User ID:', userId);
 

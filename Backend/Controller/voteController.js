@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
-import { prepareEncryptedVote } from "../Utils/voteEncryptionUtil.js";
+import { prepareEncryptedVote, decryptUserData } from "../Utils/voteEncryptionUtil.js";
 import { uploadToIPFS } from "../Utils/ipfsUtils.js";
 import { deriveAESKey } from "../Utils/encryptUserData.js";
-import { stringIdToNumber } from "../Utils/candidateIdConverter.js";
+// candidateIdConverter not needed for ObjectId hex flow
 import IpfsVoteCID from "../Model/IPFS_Vote_CID_Model.js";
 import User from "../Model/User_Model.js";
 import Election from "../Model/Election_Model.js";
@@ -12,7 +12,6 @@ export const castVote = async (req, res) => {
         const {
             candidateId,
             password,
-            hmacSecretKey,
             electionId,
             email // Only used for authentication, not stored
         } = req.body;
@@ -25,24 +24,15 @@ export const castVote = async (req, res) => {
             });
         }
 
-        // Validate candidateId is a valid string format (e.g., "C001") and convert to number
-        let numericCandidateId;
-        try {
-            // Convert string ID (e.g., "C001") to numeric ID (e.g., 1) for all calculations
-            numericCandidateId = stringIdToNumber(candidateId);
-        } catch (parseError) {
+        // Validate candidateId is a valid ObjectId hex string (24 hex chars)
+        if (typeof candidateId !== 'string' || !/^[0-9a-fA-F]{24}$/.test(candidateId)) {
             return res.status(400).json({
                 success: false,
-                error: parseError.message
+                error: 'candidateId must be a 24-character hex ObjectId string'
             });
         }
 
-        if (!hmacSecretKey) {
-            return res.status(400).json({
-                success: false,
-                error: "hmacSecretKey is required"
-            });
-        }
+        // HMAC secret is read server-side; client must not provide it
 
         // Step 0: Fetch election and get the election commission public key from database
         const election = await Election.findById(electionId).select('ecPublicKey status');
@@ -86,10 +76,7 @@ export const castVote = async (req, res) => {
 
         // Prepare all the required data for vote encryption
         const encryptedVoteData = await prepareEncryptedVote({
-            candidateId: numericCandidateId,
-            encryptedVoterPublicKey: user.publicKey,
-            publicKeyIV: user.publicKeyIV,
-            publicKeyAuthTag: user.publicKeyAuthTag,
+            candidateId: candidateId, // pass ObjectId hex string; prepareEncryptedVote will convert to BigInt
             encryptedPrivateKey: user.privateKey,
             privateKeyIV: user.privateKeyIV,
             privateKeyAuthTag: user.privateKeyAuthTag,
@@ -99,28 +86,34 @@ export const castVote = async (req, res) => {
             encryptedToken: user.token,
             tokenIV: user.tokenIV,
             tokenAuthTag: user.tokenAuthTag,
-            hmacSecretKey: hmacSecretKey,
         });
 
-        // Extract the four required components
+        // Extract required components
         const { 
             encryptedVote, 
             signedVote, 
-            encryptedVoterPublicKey, 
             tokenHash 
         } = encryptedVoteData;
         
-        // Prepare IPFS payload with ONLY the four anonymous components
-        const ipfsPayload = { 
-            encryptedVote, 
-            signedVote, 
-            encryptedVoterPublicKey, 
+        // Decrypt the voter's public key so we can include the plain public key with the vote payload
+        const voterPublicKey = decryptUserData(
+            user.publicKey,
+            aesKey,
+            user.publicKeyIV,
+            user.publicKeyAuthTag
+        );
+
+        // Prepare IPFS payload that includes the plain voter's public key (not identifying beyond the key)
+        const ipfsPayload = {
+            encryptedVote,
+            signedVote,
             tokenHash,
+            voterPublicKey,
             electionId, // Only store election ID, no voter identification
         };
         
         // Anonymous filename - no voter identification
-        const fileName = `vote_${electionId}_${Date.now()}.json`;
+        const fileName = `vote.json`;
 
         // Upload to IPFS
         const { IpfsHash: cid, url } = await uploadToIPFS(ipfsPayload, fileName);
@@ -137,10 +130,9 @@ export const castVote = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                // The four required components:
+                // The required components:
                 encryptedVote,
                 signedVote,
-                encryptedVoterPublicKey,
                 tokenHash,
                 ipfs: {
                     cid: cid,
