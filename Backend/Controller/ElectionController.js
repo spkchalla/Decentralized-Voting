@@ -162,13 +162,19 @@ export const createElection = async (req, res) => {
                 const userSpecificTokenHash = hashToken(token);
                 const userSpecificPublicKeyHash = hashPublicKey(cleanPublicKey);
 
-                // Create IPFSRegistration document
-                const registration = new IPFSRegistration({
-                    tokenHash: userSpecificTokenHash,
-                    publicKeyHash: userSpecificPublicKeyHash,
-                    hasVoted: false,
-                    election: election._id
-                });
+                                // Debug: log registration hashes (short fingerprints)
+                                try {
+                                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+                                    console.log(`REG_CREATE: user=${user._id} tokenHash=${fp(userSpecificTokenHash)} publicKeyHash=${fp(userSpecificPublicKeyHash)} format=cleanPublicKey`);
+                                } catch (e) {}
+
+                                // Create IPFSRegistration document
+                                const registration = new IPFSRegistration({
+                                        tokenHash: userSpecificTokenHash,
+                                        publicKeyHash: userSpecificPublicKeyHash,
+                                        hasVoted: false,
+                                        election: election._id
+                                });
 
                 await registration.save();
 

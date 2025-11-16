@@ -145,12 +145,18 @@ export const prepareEncryptedVote = async ({
     const { key: aesKey } = await deriveAESKey(password, saltBuffer);
 
     // Step 1: Decrypt the token
-    const decryptedToken = decryptUserData(
-      encryptedToken,
-      aesKey,
-      tokenIV,
-      tokenAuthTag
-    );
+    let decryptedToken;
+    try {
+      decryptedToken = decryptUserData(
+        encryptedToken,
+        aesKey,
+        tokenIV,
+        tokenAuthTag
+      );
+    } catch (err) {
+      // Provide a clear error so callers can surface a helpful message
+      throw new Error(`TokenDecryptionFailed: ${err.message}`);
+    }
 
     // Step 2: Generate random BigInt and mask the ObjectId (candidateId is hex string)
     const idBigInt = objectIdHexToBigInt(candidateId);
@@ -178,6 +184,14 @@ export const prepareEncryptedVote = async ({
 
     // Step 5: Hash the decrypted token
     const tokenHash = await hashToken(decryptedToken, hmacSecretKey);
+
+    // Debug: log short fingerprints (safe for short-term debug only)
+    try {
+      const fingerprint = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+      console.log(`VOTE_PREP: decryptedToken=${fingerprint(decryptedToken)} tokenHash=${fingerprint(tokenHash)}`);
+    } catch (e) {
+      // ignore logging errors
+    }
 
     // Step 6: Encrypt the masked vote AND random together as JSON object
     // Build payload with hex strings and encrypt

@@ -290,12 +290,18 @@ export const registerForElection = async (req, res) => {
         console.log('Registration - Crypto fields generated');
 
         // Create IPFSRegistration record for this election
-        const ipfsRegistration = new IPFSRegistration({
-            tokenHash,
-            publicKeyHash,
-            hasVoted: false,
-            election: electionId
-        });
+                // Debug: log registration hashes (short fingerprints)
+                try {
+                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+                    console.log(`REG_USER_CREATE: user=${userId.toString()} tokenHash=${fp(tokenHash)} publicKeyHash=${fp(publicKeyHash)}`);
+                } catch (e) {}
+
+                const ipfsRegistration = new IPFSRegistration({
+                        tokenHash,
+                        publicKeyHash,
+                        hasVoted: false,
+                        election: electionId
+                });
 
         await ipfsRegistration.save({ session });
         console.log('Registration - IPFSRegistration created');

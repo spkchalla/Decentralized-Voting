@@ -108,12 +108,24 @@ export const runTally = async (req, res) => {
         // Compute hash of voter's public key
         const pubKeyHash = hmacSHA256(voterPublicKey, process.env.HMAC_SECRET_KEY);
 
+        // Debug: log incoming vote fingerprint and computed pubKeyHash
+        try {
+          const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+          console.log(`TALLY_LOOKUP: cid=${voteRecord.cid} tokenHash=${fp(tokenHash)} pubKeyHash=${fp(pubKeyHash)}`);
+        } catch (e) {}
+
         // Check if this registration has already been used
         const registration = await IPFSRegistration.findOne({
           tokenHash: tokenHash,
           publicKeyHash: pubKeyHash,
           election: electionId,
         });
+
+        if (!registration) {
+          try {
+            console.log(`TALLY_LOOKUP_NOTFOUND: cid=${voteRecord.cid} tokenHash=${tokenHash ? tokenHash.slice(0,6) : 'null'} pubKeyHash=${pubKeyHash ? pubKeyHash.slice(0,6) : 'null'}`);
+          } catch (e) {}
+        }
 
         if (!registration) {
           invalidVotes++;

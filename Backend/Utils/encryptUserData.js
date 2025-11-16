@@ -150,6 +150,14 @@ export const generateCryptoFields = async (password) => {
         const tokenHash = hashToken(token);
         const publicKeyHash = hashPublicKey(publicKey);
 
+        // Debug: log generated registration hashes (short fingerprints)
+        try {
+            const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+            console.log(`GEN_CRYPTO: token=${fp(token)} tokenHash=${fp(tokenHash)} publicKeyHash=${fp(publicKeyHash)}`);
+        } catch (e) {
+            // ignore logging errors
+        }
+
         // ✅ SECURITY FIX: Only return what's needed for storage
         return {
             // For User Model (Encrypted)
