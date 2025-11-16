@@ -88,12 +88,18 @@ export const castVote = async (req, res) => {
             tokenAuthTag: user.tokenAuthTag,
         });
 
-        // Extract required components
+                // Extract required components
         const { 
             encryptedVote, 
             signedVote, 
             tokenHash 
         } = encryptedVoteData;
+
+                // Debug: fingerprint tokenHash
+                try {
+                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+                    console.log(`CAST_VOTE: tokenHash=${fp(tokenHash)}`);
+                } catch (e) {}
         
         // Decrypt the voter's public key so we can include the plain public key with the vote payload
         const voterPublicKey = decryptUserData(
