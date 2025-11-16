@@ -17,7 +17,7 @@ const ipfsVoteCIDSchema = new mongoose.Schema({
         ref: "Election",
         required: true,
         // Note: NOT unique - multiple votes per election allowed
-        index: true
+        //index: true
     }
 });
 
