@@ -4,12 +4,12 @@ const ipfsRegistrationCIDSchema = new mongoose.Schema({
     cid: {
         type: String,
         required: true,
-        unique: true,
+        //unique: true,
     },
     link:{
         type: String,
         required: true,
-        unique: true,
+        //unique: true,
     },
     electionId: {
         type: mongoose.Schema.ObjectId,
