@@ -111,7 +111,7 @@ export const runTally = async (req, res) => {
         // Debug: log incoming vote fingerprint and computed pubKeyHash
         try {
           const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
-          console.log(`TALLY_LOOKUP: cid=${voteRecord.cid} tokenHash=${fp(tokenHash)} pubKeyHash=${fp(pubKeyHash)}`);
+          console.log(`TALLY_VOTE: encryptedVote length=${votePayload.encryptedVote.length}`);
         } catch (e) {}
 
         // Check if this registration has already been used
