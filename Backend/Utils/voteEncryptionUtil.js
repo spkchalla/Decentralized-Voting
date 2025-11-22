@@ -121,9 +121,6 @@ export const encryptWithElectionCommissionPublicKey = async (
 // In voteEncryptionUtil.js - update prepareEncryptedVote function
 export const prepareEncryptedVote = async ({
   candidateId,
-  encryptedVoterPublicKey,
-  publicKeyIV,
-  publicKeyAuthTag,
   encryptedPrivateKey,
   privateKeyIV,
   privateKeyAuthTag,
@@ -196,6 +193,8 @@ export const prepareEncryptedVote = async ({
 
     // Encrypt the vote payload with AES-GCM
     const cipher = crypto.createCipheriv('aes-256-gcm', voteAesKey, voteIV);
+    
+    // ✅ FIXED: Changed comma to period
     let encryptedVotePayload = cipher.update(JSON.stringify(votePayload), 'utf8', 'hex');
     encryptedVotePayload += cipher.final('hex');
     const voteAuthTag = cipher.getAuthTag();
@@ -220,6 +219,9 @@ export const prepareEncryptedVote = async ({
 
     // Convert the wrapper to base64 for storage
     const encryptedVote = Buffer.from(JSON.stringify(voteWrapper)).toString('base64');
+
+    // Debug log to verify the structure
+    console.log(`VOTE_PREP_HYBRID: encryptedVote length=${encryptedVote.length}, wrapper keys=${Object.keys(voteWrapper).join(',')}`);
 
     // Return the required components
     return {
