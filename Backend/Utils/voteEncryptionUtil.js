@@ -118,6 +118,7 @@ export const encryptWithElectionCommissionPublicKey = async (
 };
 
 // In voteEncryptionUtil.js - update the prepareEncryptedVote function
+// In voteEncryptionUtil.js - update prepareEncryptedVote function
 export const prepareEncryptedVote = async ({
   candidateId,
   encryptedVoterPublicKey,
@@ -141,7 +142,7 @@ export const prepareEncryptedVote = async ({
     }
 
     // Step 0: Derive AES key using Argon2
-    const saltBuffer = Buffer.from(privateKeySalt, "hex");
+    const saltBuffer = Buffer.from(privateKeySalt, 'hex');
     const { key: aesKey } = await deriveAESKey(password, saltBuffer);
 
     // Step 1: Decrypt the token
@@ -154,19 +155,17 @@ export const prepareEncryptedVote = async ({
         tokenAuthTag
       );
     } catch (err) {
-      // Provide a clear error so callers can surface a helpful message
       throw new Error(`TokenDecryptionFailed: ${err.message}`);
     }
 
-    // Step 2: Generate random BigInt and mask the ObjectId (candidateId is hex string)
+    // Step 2: Generate random BigInt and mask the ObjectId
     const idBigInt = objectIdHexToBigInt(candidateId);
     const randBigInt = randomBigIntBytes(16); // 128-bit random nonce
     const maskedBigInt = maskBigInt(idBigInt, randBigInt);
-    // represent as hex strings for serialization
     const maskedHex = maskedBigInt.toString(16);
     const randHex = randBigInt.toString(16);
 
-    // Step 4: Sign the masked vote (just the masked vote number, not JSON)
+    // Step 3: Sign the canonical JSON { masked, rand }
     const decryptedPrivatePEM = decryptUserData(
       encryptedPrivateKey,
       aesKey,
@@ -174,7 +173,6 @@ export const prepareEncryptedVote = async ({
       privateKeyAuthTag
     );
     
-    // Sign canonical JSON including both masked and rand to bind them
     const signedPayloadStr = JSON.stringify({ masked: maskedHex, rand: randHex });
     const signature = crypto.sign("sha256", Buffer.from(signedPayloadStr, 'utf8'), {
       key: decryptedPrivatePEM,
@@ -182,35 +180,52 @@ export const prepareEncryptedVote = async ({
       saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
     });
 
-    // Step 5: Hash the decrypted token
+    // Step 4: Hash the decrypted token
     const tokenHash = await hashToken(decryptedToken, hmacSecretKey);
 
-    // Debug: log short fingerprints (safe for short-term debug only)
-    try {
-      const fingerprint = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
-      console.log(`VOTE_PREP: decryptedToken=${fingerprint(decryptedToken)} tokenHash=${fingerprint(tokenHash)}`);
-    } catch (e) {
-      // ignore logging errors
-    }
-
-    // Step 6: Encrypt the masked vote AND random together as JSON object
-    // Build payload with hex strings and encrypt
+    // Step 5: Use HYBRID encryption (AES + RSA) instead of direct RSA
+    // Generate a random AES key for this vote
+    const voteAesKey = crypto.randomBytes(32);
+    const voteIV = crypto.randomBytes(12);
+    
+    // Create the vote payload
     const votePayload = {
       masked: maskedHex,
       rand: randHex
     };
 
-    const encryptedVote = await encryptWithElectionCommissionPublicKey(
-      votePayload, // JSON with hex strings
-      ensurePem(electionCommissionPublicKey)
+    // Encrypt the vote payload with AES-GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', voteAesKey, voteIV);
+    let encryptedVotePayload = cipher.update(JSON.stringify(votePayload), 'utf8', 'hex');
+    encryptedVotePayload += cipher.final('hex');
+    const voteAuthTag = cipher.getAuthTag();
+
+    // Encrypt the AES key with RSA (election commission public key)
+    const encryptedAesKey = crypto.publicEncrypt(
+      {
+        key: ensurePem(electionCommissionPublicKey),
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256",
+      },
+      voteAesKey
     );
 
-    // Return the required components in the correct format
-    // Note: we no longer encrypt the voter's public key with the election commission public key
+    // Create the wrapper structure that decryptVoteWrapper expects
+    const voteWrapper = {
+      encryptedKey: encryptedAesKey.toString('base64'),
+      iv: voteIV.toString('hex'),
+      authTag: voteAuthTag.toString('hex'),
+      ciphertext: encryptedVotePayload
+    };
+
+    // Convert the wrapper to base64 for storage
+    const encryptedVote = Buffer.from(JSON.stringify(voteWrapper)).toString('base64');
+
+    // Return the required components
     return {
-      encryptedVote,           // 1. encrypted JSON containing {masked: hex, rand: hex}
-      signedVote: signature.toString("base64"), // 2. signature string (over JSON)
-      tokenHash,               // 3. hashed token of user
+      encryptedVote,           // Base64 encoded wrapper with encrypted AES key + encrypted vote
+      signedVote: signature.toString("base64"), // Signature over the vote payload
+      tokenHash,               // Hashed token of user
     };
   } catch (err) {
     throw new Error(`prepareEncryptedVote Error: ${err.message}`);

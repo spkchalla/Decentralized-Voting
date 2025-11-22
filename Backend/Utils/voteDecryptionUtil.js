@@ -63,13 +63,14 @@ export const decryptElectionPrivateKey = async (
  * Decrypt the vote wrapper (RSA-encrypted AES key, then AES-encrypted payload)
  * Returns the decrypted { masked, rand } object
  */
+// In voteDecryptionUtil.js - verify decryptVoteWrapper handles the new structure
 export const decryptVoteWrapper = (encryptedVoteBase64, ecPrivateKeyPem) => {
   try {
     if (!encryptedVoteBase64 || !ecPrivateKeyPem) {
       throw new Error("encryptedVoteBase64 and ecPrivateKeyPem are required");
     }
 
-    // Parse the wrapper from base64
+    // Parse the wrapper from base64 - THIS SHOULD ALREADY WORK
     const wrapperJson = JSON.parse(
       Buffer.from(encryptedVoteBase64, "base64").toString("utf8")
     );
@@ -81,6 +82,7 @@ export const decryptVoteWrapper = (encryptedVoteBase64, ecPrivateKeyPem) => {
       );
     }
 
+    // The rest should work as-is...
     // Decrypt the AES key using election private key (RSA-OAEP)
     const aesKeyBuffer = crypto.privateDecrypt(
       {
