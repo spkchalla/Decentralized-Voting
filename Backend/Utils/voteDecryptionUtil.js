@@ -48,20 +48,7 @@ export const decryptWithElectionCommissionPrivateKey = async (
         },
         buffer
     );
-
-    // Decrypt the vote payload using AES-GCM
-    const decipher = crypto.createDecipheriv(AES_ALGO, aesKeyBuffer, Buffer.from(iv, "hex"));
-    decipher.setAuthTag(Buffer.from(authTag, "hex"));
-
-    let decrypted = decipher.update(ciphertext, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-
-    // Parse the decrypted JSON to get { masked, rand }
-    const votePayload = JSON.parse(decrypted);
-    return votePayload; // { masked, rand } as hex strings
-  } catch (error) {
-    throw new Error(`decryptVoteWrapper Error: ${error.message}`);
-  }
+    return JSON.parse(decrypted.toString());
 };
 
 /**
