@@ -2,26 +2,33 @@ import mongoose from "mongoose";
 
 const ipfsRegistrationSchema = new mongoose.Schema({
 
-    tokenHash:{
+    tokenHash: {
         type: String,
         required: true,
-        unique: true,
         index: true,
     },
-    publicKeyHash:{
+    publicKeyHash: {
         type: String,
         required: true,
-        unique: true,
         index: true,
     },
-    hasVoted:{
+    hasVoted: {
         type: Boolean,
         required: true,
         default: false,
     },
-    election:{
-        type:mongoose.Schema.ObjectId,
-        ref:'Election'
+    election: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Election',
+        required: true,
+        index: true,
     }
 });
+
+// Compound unique index: same tokenHash can exist for different elections
+ipfsRegistrationSchema.index({ tokenHash: 1, election: 1 }, { unique: true });
+
+// Compound unique index: same publicKeyHash can exist for different elections
+ipfsRegistrationSchema.index({ publicKeyHash: 1, election: 1 }, { unique: true });
+
 export default mongoose.model("IPFSRegistration", ipfsRegistrationSchema);

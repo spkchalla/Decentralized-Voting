@@ -3,11 +3,10 @@ import IPFSRegistration from "../Model/IPFSRegistration_Model.js";
 import Election from "../Model/Election_Model.js";
 import Candidate from "../Model/Candidate_Model.js";
 import { fetchFromIPFS } from "../Utils/ipfsUtils.js";
-import { hmacSHA256 } from "../Utils/voteEncryptionUtil.js";
+import { hmacSHA256, decryptUserData } from "../Utils/voteEncryptionUtil.js";
 import {
   decryptElectionPrivateKey,
   decryptAndVerifyVote,
-  decryptUserData,
 } from "../Utils/voteDecryptionUtil.js";
 import crypto from "crypto";
 
@@ -61,43 +60,55 @@ export const runTally = async (req, res) => {
       });
     }
 
-    // Initialize vote count map
+    // Initialize vote count map and details array
     const voteCounts = new Map(); // candidateId -> count
+    const voteDetails = []; // Array to store details for every vote
     let validVotes = 0;
     let duplicateVotes = 0;
     let invalidVotes = 0;
-    const errors = [];
+
+    // CRITICAL FIX: Reset state before tallying
+    // Since we process ALL votes from IPFS, we must reset the "hasVoted" flags 
+    // and candidate counts to ensure a fresh, correct tally every time.
+    await Candidate.updateMany({ currentElection: electionId }, { votes: 0 });
+    await IPFSRegistration.updateMany({ election: electionId }, { hasVoted: false });
+    console.log("Tally State Reset: Cleared vote counts and hasVoted flags.");
 
     // Process each vote
     for (const voteRecord of voteRecords) {
       try {
-        const { IpfsHash, url } = voteRecord;
-
         // Step 1: Fetch vote from IPFS
         let votePayload;
         try {
           const { data } = await fetchFromIPFS(voteRecord.cid);
           votePayload = data;
+
+          // Debug: Log what we received from IPFS
+          console.log(`\n=== TALLY DEBUG: Vote CID ${voteRecord.cid.slice(0, 10)}... ===`);
+          console.log('Payload keys:', votePayload ? Object.keys(votePayload) : 'null');
         } catch (err) {
           invalidVotes++;
-          errors.push({
+          voteDetails.push({
             cid: voteRecord.cid,
-            error: `Failed to fetch from IPFS: ${err.message}`,
+            status: "Invalid",
+            reason: `Failed to fetch from IPFS: ${err.message}`
           });
           continue;
         }
 
         // Validate payload structure
-        if (
-          !votePayload.encryptedVote ||
-          !votePayload.signedVote ||
-          !votePayload.tokenHash ||
-          !votePayload.voterPublicKey
-        ) {
+        const missingFields = [];
+        if (!votePayload.encryptedVote) missingFields.push('encryptedVote');
+        if (!votePayload.signedVote) missingFields.push('signedVote');
+        if (!votePayload.tokenHash) missingFields.push('tokenHash');
+        if (!votePayload.voterPublicKey) missingFields.push('voterPublicKey');
+
+        if (missingFields.length > 0) {
           invalidVotes++;
-          errors.push({
+          voteDetails.push({
             cid: voteRecord.cid,
-            error: "Invalid vote payload structure",
+            status: "Invalid",
+            reason: `Invalid vote payload structure - missing fields: ${missingFields.join(', ')}`
           });
           continue;
         }
@@ -105,14 +116,8 @@ export const runTally = async (req, res) => {
         // Step 2: Duplicate check
         const { tokenHash, voterPublicKey } = votePayload;
 
-        // Compute hash of voter's public key
-        const pubKeyHash = hmacSHA256(voterPublicKey, process.env.HMAC_SECRET_KEY);
-
-        // Debug: log incoming vote fingerprint and computed pubKeyHash
-        try {
-          const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
-          console.log(`TALLY_VOTE: encryptedVote length=${votePayload.encryptedVote.length}`);
-        } catch (e) {}
+        // Compute hash of voter's public key (Must match Registration logic: simple SHA-256)
+        const pubKeyHash = crypto.createHash('sha256').update(voterPublicKey).digest('hex');
 
         // Check if this registration has already been used
         const registration = await IPFSRegistration.findOne({
@@ -122,22 +127,22 @@ export const runTally = async (req, res) => {
         });
 
         if (!registration) {
-          try {
-            console.log(`TALLY_LOOKUP_NOTFOUND: cid=${voteRecord.cid} tokenHash=${tokenHash ? tokenHash.slice(0,6) : 'null'} pubKeyHash=${pubKeyHash ? pubKeyHash.slice(0,6) : 'null'}`);
-          } catch (e) {}
-        }
-
-        if (!registration) {
           invalidVotes++;
-          errors.push({
+          voteDetails.push({
             cid: voteRecord.cid,
-            error: "Registration not found for this vote",
+            status: "Invalid",
+            reason: "Registration not found for this vote (Token/Key mismatch or not registered for this election)"
           });
           continue;
         }
 
         if (registration.hasVoted) {
           duplicateVotes++;
+          voteDetails.push({
+            cid: voteRecord.cid,
+            status: "Duplicate",
+            reason: "Voter has already cast a vote in this election"
+          });
           continue; // Skip duplicate vote
         }
 
@@ -152,9 +157,10 @@ export const runTally = async (req, res) => {
           );
         } catch (err) {
           invalidVotes++;
-          errors.push({
+          voteDetails.push({
             cid: voteRecord.cid,
-            error: `Vote decryption/verification failed: ${err.message}`,
+            status: "Invalid",
+            reason: `Vote decryption/verification failed: ${err.message}`
           });
           continue;
         }
@@ -163,9 +169,10 @@ export const runTally = async (req, res) => {
         const candidate = await Candidate.findById(candidateObjectIdHex);
         if (!candidate) {
           invalidVotes++;
-          errors.push({
+          voteDetails.push({
             cid: voteRecord.cid,
-            error: `Candidate ${candidateObjectIdHex} not found`,
+            status: "Invalid",
+            reason: `Candidate ID ${candidateObjectIdHex} not found in database`
           });
           continue;
         }
@@ -179,11 +186,19 @@ export const runTally = async (req, res) => {
         await registration.save();
 
         validVotes++;
+        voteDetails.push({
+          cid: voteRecord.cid,
+          status: "Valid",
+          reason: "Vote successfully decrypted, verified, and counted",
+          candidateId: candidateObjectIdHex // Optional: include who they voted for (admin only)
+        });
+
       } catch (err) {
         invalidVotes++;
-        errors.push({
+        voteDetails.push({
           cid: voteRecord.cid,
-          error: `Unexpected error: ${err.message}`,
+          status: "Invalid",
+          reason: `Unexpected processing error: ${err.message}`
         });
       }
     }
@@ -246,7 +261,7 @@ export const runTally = async (req, res) => {
       },
       results, // All candidates with vote counts
       winner: winnerDetails, // Winner details
-      errors: errors.length > 0 ? errors : null, // Errors if any
+      voteDetails: voteDetails, // Detailed report for every vote
     });
   } catch (err) {
     console.error("Error in runTally:", err);
