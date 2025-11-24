@@ -4,11 +4,20 @@ import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { generateCryptoFields } from '../Utils/encryptUserData.js';
+import { uploadToIPFS } from '../Utils/ipfsUtils.js';
 
-// Get user's election dashboard
 // Get user's election dashboard
 export const getUserElectionDashboard = async (req, res) => {
     try {
+        // Defensive: ensure middleware attached a valid user
+        if (!req.user) {
+            console.error('getUserElectionDashboard: no user attached to request');
+            return res.status(401).json({
+                success: false,
+                message: 'Not authorized, no user found on request'
+            });
+        }
+
         const userId = req.user._id;
         console.log('Dashboard - User ID:', userId);
 
@@ -331,6 +340,11 @@ export const registerForElection = async (req, res) => {
         console.log('Registration - Crypto fields ready:', useExistingFields ? 'EXISTING' : 'NEW');
 
         // Create IPFSRegistration record for this election
+        try {
+            const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+            console.log(`REG_USER_CREATE: user=${userId.toString()} tokenHash=${fp(tokenHash)} publicKeyHash=${fp(publicKeyHash)}`);
+        } catch (e) {}
+
         const ipfsRegistration = new IPFSRegistration({
             tokenHash,
             publicKeyHash,
@@ -424,7 +438,7 @@ export const getElectionDetails = async (req, res) => {
 
         // Check if user is part of this election
         const userData = election.users.find(
-            userEntry => userEntry.user._id.toString() === userId
+            userEntry => userEntry.user && userEntry.user._id && userEntry.user._id.toString() === userId.toString()
         );
 
         if (!userData) {

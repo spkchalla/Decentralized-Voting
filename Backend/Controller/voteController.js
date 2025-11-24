@@ -93,7 +93,6 @@ export const castVote = async (req, res) => {
             encryptedToken: user.token,
             tokenIV: user.tokenIV,
             tokenAuthTag: user.tokenAuthTag,
-            hmacSecretKey: hmacSecretKey,
         });
 
         // Extract required components
@@ -121,7 +120,7 @@ export const castVote = async (req, res) => {
         };
 
         // Anonymous filename - no voter identification
-        const fileName = `vote_${electionId}_${Date.now()}.json`;
+        const fileName = `vote.json`;
 
         // Upload to IPFS
         const { IpfsHash: cid, url } = await uploadToIPFS(ipfsPayload, fileName);
@@ -138,7 +137,7 @@ export const castVote = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                // The four required components:
+                // The required components:
                 encryptedVote,
                 signedVote,
                 voterPublicKey,  // Plain text public key

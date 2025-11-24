@@ -115,10 +115,14 @@ export const hashToken = (token) => {
     }
 };
 
-// Hash public key using SHA-256
+// Hash public key using HMAC-SHA256 (server-side secret)
 export const hashPublicKey = (publicKey) => {
     try {
-        return crypto.createHash('sha256').update(publicKey).digest('hex');
+        const secretKey = process.env.HMAC_SECRET_KEY;
+        if (!secretKey) {
+            throw new Error('HMAC_SECRET_KEY not found in environment variables');
+        }
+        return hmacSHA256(publicKey, secretKey);
     } catch (err) {
         throw new Error(`hashPublicKey Error: ${err.message}`);
     }
@@ -145,6 +149,14 @@ export const generateCryptoFields = async (password) => {
         // Step 4: Generate hashes for IPFSRegistration
         const tokenHash = hashToken(token);
         const publicKeyHash = hashPublicKey(publicKey);
+
+        // Debug: log generated registration hashes (short fingerprints)
+        try {
+            const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+            console.log(`GEN_CRYPTO: token=${fp(token)} tokenHash=${fp(tokenHash)} publicKeyHash=${fp(publicKeyHash)}`);
+        } catch (e) {
+            // ignore logging errors
+        }
 
         // ✅ SECURITY FIX: Only return what's needed for storage
         return {

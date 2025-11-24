@@ -1,5 +1,7 @@
 import crypto from "crypto";
 import { deriveAESKey } from "./encryptUserData.js";
+import { objectIdHexToBigInt, randomBigIntBytes, maskBigInt, bigIntToObjectIdHex } from './objectIdUtils.js';
+import { ensurePem } from './keyUtils.js';
 const AES_ALGO = "aes-256-gcm";
 
 // HMAC-SHA256
@@ -13,26 +15,7 @@ export const hmacSHA256 = (data, secretKey) => {
   }
 };
 
-// Generate Random no. for masking.
-export const generateRandomInt = (max = 1000000) => {
-  try {
-    return crypto.randomInt(1, max);
-  } catch (err) {
-    throw new Error(`generateRandomInt Error: ${err.message}`);
-  }
-};
-
-// Mask the candidate Id with the random number
-export const maskVote = (candidateID, rand) => {
-  try {
-    if (!Number.isInteger(candidateID) || !Number.isInteger(rand)) {
-      throw new Error("candidateID and rand must be INTEGERS!!");
-    }
-    return candidateID ^ rand;
-  } catch (err) {
-    throw new Error(`maskVote Error: ${err.message}`);
-  }
-};
+// (Replaced) Use BigInt-based masking for ObjectId hex compatibility
 
 // Add this decrypt function to voteEncryptionUtil.js
 export const decryptUserData = (encryptedData, aesKey, iv, authTag) => {
@@ -114,22 +97,8 @@ export const encryptWithElectionCommissionPublicKey = async (
     // Convert payload to JSON string and buffer
     const buffer = Buffer.from(JSON.stringify(payload));
 
-    // Handle if public key is base64 encoded, convert to PEM format
-    let publicKeyForEncryption = electionCommissionPublicKey;
-    if (typeof electionCommissionPublicKey === 'string') {
-      // Check if it's already in PEM format
-      if (!electionCommissionPublicKey.includes('-----BEGIN')) {
-        // If it looks like base64 or hex, try to convert it
-        // Assume it's base64 encoded DER format and convert to PEM
-        try {
-          const keyBuffer = Buffer.from(electionCommissionPublicKey, 'base64');
-          publicKeyForEncryption = `-----BEGIN PUBLIC KEY-----\n${keyBuffer.toString('base64').match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----`;
-        } catch (conversionError) {
-          // If conversion fails, use as-is and let crypto.publicEncrypt handle the error
-          publicKeyForEncryption = electionCommissionPublicKey;
-        }
-      }
-    }
+    // Ensure PEM format for use with crypto
+    const publicKeyForEncryption = ensurePem(electionCommissionPublicKey);
 
     const encrypted = crypto.publicEncrypt(
       {
@@ -149,6 +118,7 @@ export const encryptWithElectionCommissionPublicKey = async (
 };
 
 // In voteEncryptionUtil.js - update the prepareEncryptedVote function
+// In voteEncryptionUtil.js - update prepareEncryptedVote function
 export const prepareEncryptedVote = async ({
   candidateId,
   encryptedPrivateKey,
@@ -160,15 +130,16 @@ export const prepareEncryptedVote = async ({
   encryptedToken,
   tokenIV,
   tokenAuthTag,
-  hmacSecretKey,
 }) => {
   try {
+    // Use server-side HMAC secret; do not accept from client
+    const hmacSecretKey = process.env.HMAC_SECRET_KEY;
     if (!hmacSecretKey) {
-      throw new Error("HMAC secret key is required");
+      throw new Error("HMAC secret key not configured on server");
     }
 
     // Step 0: Derive AES key using Argon2
-    const saltBuffer = Buffer.from(privateKeySalt, "hex");
+    const saltBuffer = Buffer.from(privateKeySalt, 'hex');
     const { key: aesKey } = await deriveAESKey(password, saltBuffer);
 
     // Step 1: Decrypt the token

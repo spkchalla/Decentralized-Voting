@@ -93,16 +93,12 @@ export const createElection = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 12);
 
         // -------------------------
-        // 4. GENERATE RSA KEYS AND STRIP PEM HEADERS
+        // 4. GENERATE RSA KEYS
         // -------------------------
         const { publicKey, privateKey } = await generateRSAKeyPair();
 
-        // Strip PEM headers from public key for cleaner storage
-        const cleanPublicKey = publicKey
-            .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-            .replace(/-----END PUBLIC KEY-----/g, '')
-            .replace(/\n/g, '')
-            .trim();
+        // Store full PEM public key for compatibility with crypto APIs
+        // NO LONGER STRIPPING HEADERS FOR HASHING
 
         // -------------------------
         // 5. CREATE TOKEN + AES KEY
@@ -112,7 +108,8 @@ export const createElection = async (req, res) => {
 
         // Use the imported utility functions instead of recreating
         const tokenHash = hashToken(token);
-        const publicKeyHash = hashPublicKey(cleanPublicKey);
+        // FIX: Use full PEM public key for hashing (consistent with user registration)
+        const publicKeyHash = hashPublicKey(publicKey);
 
         const encryptedPrivateKey = encryptUserData(privateKey, aesKey);
         const encryptedToken = encryptUserData(token, aesKey);
@@ -136,7 +133,7 @@ export const createElection = async (req, res) => {
             endDateTime: endDate,
             officers,
             status,
-            ecPublicKey: cleanPublicKey, // Store without PEM headers
+            ecPublicKey: publicKey, // Store full PEM for direct use by crypto
             ecPrivateKey: encryptedPrivateKey.encryptedUserData,
             ecPrivateKeyIV: encryptedPrivateKey.iv,
             ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,
@@ -156,10 +153,16 @@ export const createElection = async (req, res) => {
 
         for (const user of users) {
             try {
-                // Create unique hashes for each user to avoid duplicate constraints
-                // Use the imported hash functions with user-specific data
-                const userSpecificTokenHash = hashToken(token + user._id.toString());
-                const userSpecificPublicKeyHash = hashPublicKey(cleanPublicKey + user._id.toString());
+                // Hash the plain token and public key for registration.
+                // FIX: Use full PEM public key for hashing (consistent with user registration)
+                const userSpecificTokenHash = hashToken(token);
+                const userSpecificPublicKeyHash = hashPublicKey(publicKey);
+
+                // Debug: log registration hashes (short fingerprints)
+                try {
+                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+                    console.log(`REG_CREATE: user=${user._id} tokenHash=${fp(userSpecificTokenHash)} publicKeyHash=${fp(userSpecificPublicKeyHash)} format=fullPEM`);
+                } catch (e) {}
 
                 // Create IPFSRegistration document
                 const registration = new IPFSRegistration({

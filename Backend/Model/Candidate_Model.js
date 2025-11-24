@@ -25,6 +25,10 @@ const candidateSchema = new Schema({
     status: {
         type: Number,
         default: 1 // Default to active
+    },
+    votes: {
+        type: Number,
+        default: 0 // Number of votes received
     }
 }, { timestamps: true });
 
