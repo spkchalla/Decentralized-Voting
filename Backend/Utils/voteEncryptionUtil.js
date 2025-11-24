@@ -76,9 +76,9 @@ export const signMaskedVote = async ({
       privateKeyIV,
       privateKeyAuthTag
     );
-    
+
     const maskedVoteBuffer = Buffer.from(String(maskedVote), "utf8");
-    
+
     const signature = crypto.sign("sha256", maskedVoteBuffer, {
       key: decryptedPrivatePEM,
       padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
@@ -151,9 +151,6 @@ export const encryptWithElectionCommissionPublicKey = async (
 // In voteEncryptionUtil.js - update the prepareEncryptedVote function
 export const prepareEncryptedVote = async ({
   candidateId,
-  encryptedVoterPublicKey,
-  publicKeyIV,
-  publicKeyAuthTag,
   encryptedPrivateKey,
   privateKeyIV,
   privateKeyAuthTag,
@@ -174,15 +171,7 @@ export const prepareEncryptedVote = async ({
     const saltBuffer = Buffer.from(privateKeySalt, "hex");
     const { key: aesKey } = await deriveAESKey(password, saltBuffer);
 
-    // Step 1: Decrypt the voter's public key
-    const voterPublicKey = decryptUserData(
-      encryptedVoterPublicKey,
-      aesKey,
-      publicKeyIV,
-      publicKeyAuthTag
-    );
-
-    // Step 2: Decrypt the token
+    // Step 1: Decrypt the token
     const decryptedToken = decryptUserData(
       encryptedToken,
       aesKey,
@@ -190,52 +179,50 @@ export const prepareEncryptedVote = async ({
       tokenAuthTag
     );
 
-    // Step 3: Generate random number and mask the vote
+    // Step 3: Generate random salt (for obfuscation, not XOR masking since we have ObjectId)
     const rand = generateRandomInt();
-    const maskedVote = maskVote(candidateId, rand);
+    // candidateId is now a MongoDB ObjectId string (24 hex chars)
+    // We don't mask it with XOR since it's not a number, we just include it with random salt
 
-    // Step 4: Sign the masked vote (just the masked vote number, not JSON)
+    // Step 4: Create vote payload with candidateId and random salt
+    const voteData = {
+      candidateId: candidateId,  // MongoDB ObjectId string
+      rand: rand                  // Random salt for additional obfuscation
+    };
+
+    // Convert voteData to string for signing
+    const voteDataString = JSON.stringify(voteData);
+
+    // Step 5: Sign the vote data
     const decryptedPrivatePEM = decryptUserData(
       encryptedPrivateKey,
       aesKey,
       privateKeyIV,
       privateKeyAuthTag
     );
-    
-    const maskedVoteBuffer = Buffer.from(String(maskedVote), "utf8");
-    const signature = crypto.sign("sha256", maskedVoteBuffer, {
+
+    const voteDataBuffer = Buffer.from(voteDataString, "utf8");
+    const signature = crypto.sign("sha256", voteDataBuffer, {
       key: decryptedPrivatePEM,
       padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
       saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
     });
 
-    // Step 5: Hash the decrypted token
-    const tokenHash = hashToken(decryptedToken, hmacSecretKey);
+    // Step 6: Hash the decrypted token
+    const tokenHash = await hashToken(decryptedToken, hmacSecretKey);
 
-    // Step 6: Encrypt the masked vote AND random together as JSON object
-    const votePayload = {
-      maskedVote: maskedVote,
-      rand: rand
-    };
-    
+    // Step 7: Encrypt the vote data (candidateId + rand) with EC's public key
     const encryptedVote = await encryptWithElectionCommissionPublicKey(
-      votePayload, // This gets encrypted as JSON
+      voteData,  // Contains {candidateId, rand}
       electionCommissionPublicKey
     );
 
-    // Step 7: Encrypt the voter's public key with election commission public key
-    const encryptedVoterPublicKeyForIPFS =
-      await encryptWithElectionCommissionPublicKey(
-        voterPublicKey,
-        electionCommissionPublicKey
-      );
-
-    // Return the four required components in the correct format
+    // Return the required components
     return {
-      encryptedVote,           // 1. encrypted JSON containing {maskedVote, rand}
+      encryptedVote,           // 1. encrypted JSON containing {candidateId, rand}
       signedVote: signature.toString("base64"), // 2. signature string only (not JSON)
-      encryptedVoterPublicKey: encryptedVoterPublicKeyForIPFS, // 3. encrypted voter public key
-      tokenHash,               // 4. hashed token of user
+      tokenHash,               // 3. hashed token of user
+      // Note: voterPublicKey is NOT returned here - it's handled separately in voteController
     };
   } catch (err) {
     throw new Error(`prepareEncryptedVote Error: ${err.message}`);

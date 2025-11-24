@@ -25,20 +25,20 @@ export const getUserElectionDashboard = async (req, res) => {
         const elections = await Election.find({
             'users.user': userId
         })
-        .populate({
-            path: 'users.user',
-            select: 'voterId name email isVerified'
-        })
-        .populate('candidates.candidate', 'candidate_id name')
-        .populate('officers', 'name email')
-        .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password')
-        .sort({ createdAt: -1 });
+            .populate({
+                path: 'users.user',
+                select: 'voterId name email isVerified'
+            })
+            .populate('candidates.candidate', 'candidate_id name')
+            .populate('officers', 'name email')
+            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password')
+            .sort({ createdAt: -1 });
 
         console.log('Dashboard - Found elections count:', elections.length);
-        
+
         // Debug: Check the actual structure of users array
         elections.forEach(election => {
-            console.log(`Dashboard - Election ${election._id} users:`, 
+            console.log(`Dashboard - Election ${election._id} users:`,
                 election.users.map(u => ({
                     user: u.user ? {
                         _id: u.user._id?.toString(),
@@ -68,8 +68,8 @@ export const getUserElectionDashboard = async (req, res) => {
             });
 
             const isAccepted = userData ? userData.isAccepted : false;
-            const registrationStatus = userData ? 
-                (userData.isAccepted ? 'registered' : 'pending') : 
+            const registrationStatus = userData ?
+                (userData.isAccepted ? 'registered' : 'pending') :
                 'not_registered';
 
             return {
@@ -179,7 +179,7 @@ export const registerForElection = async (req, res) => {
         // Verify password with bcrypt
         const isPasswordValid = await bcrypt.compare(password, user.password);
         console.log('Registration - Password valid:', isPasswordValid);
-        
+
         if (!isPasswordValid) {
             await session.abortTransaction();
             session.endSession();
@@ -260,25 +260,75 @@ export const registerForElection = async (req, res) => {
             });
         }
 
-        console.log('Registration - All validations passed, generating crypto fields...');
+        console.log('Registration - All validations passed, using existing crypto fields...');
 
-        // Generate new cryptographic fields for this election using the provided password
-        const {
-            encryptedPublicKey,
-            publicKeyIV,
-            publicKeyAuthTag,
-            encryptedPrivateKey,
-            privateKeyIV,
-            privateKeyAuthTag,
-            encryptedToken,
-            tokenIV,
-            tokenAuthTag,
-            salt,
-            tokenHash,
-            publicKeyHash
-        } = await generateCryptoFields(password);
+        // ✅ HYBRID APPROACH: Try to use existing crypto fields, fall back to generating new ones
+        let tokenHash, publicKeyHash;
+        let useExistingFields = true;
 
-        console.log('Registration - Crypto fields generated');
+        try {
+            // Attempt to use EXISTING crypto fields
+            const saltBuffer = Buffer.from(user.privateKeyDerivationSalt, 'hex');
+            const { deriveAESKey } = await import('../Utils/encryptUserData.js');
+            const { key: aesKey } = await deriveAESKey(password, saltBuffer);
+
+            // Decrypt the existing token and public key to get their hashes
+            const { decryptUserData } = await import('../Utils/voteEncryptionUtil.js');
+
+            console.log('🔍 Attempting to decrypt existing crypto fields...');
+            const decryptedToken = decryptUserData(
+                user.token,
+                aesKey,
+                user.tokenIV,
+                user.tokenAuthTag
+            );
+
+            const decryptedPublicKey = decryptUserData(
+                user.publicKey,
+                aesKey,
+                user.publicKeyIV,
+                user.publicKeyAuthTag
+            );
+
+            // Generate hashes from existing token and public key
+            const { hashToken, hashPublicKey } = await import('../Utils/encryptUserData.js');
+            tokenHash = hashToken(decryptedToken);
+            publicKeyHash = hashPublicKey(decryptedPublicKey);
+
+            console.log('✅ Successfully using existing crypto fields');
+
+        } catch (decryptError) {
+            // Decryption failed - crypto fields were encrypted with different password
+            // Fall back to generating NEW crypto fields (backward compatibility)
+            console.warn('⚠️  Decryption failed, generating NEW crypto fields for this election');
+            console.warn('⚠️  This is expected for users registered before the fix');
+
+            useExistingFields = false;
+
+            // Generate new cryptographic fields for this election
+            const { generateCryptoFields } = await import('../Utils/encryptUserData.js');
+            const cryptoFields = await generateCryptoFields(password);
+
+            tokenHash = cryptoFields.tokenHash;
+            publicKeyHash = cryptoFields.publicKeyHash;
+
+            // Update user with new encrypted keys and token
+            user.publicKey = cryptoFields.encryptedPublicKey;
+            user.publicKeyIV = cryptoFields.publicKeyIV;
+            user.publicKeyAuthTag = cryptoFields.publicKeyAuthTag;
+            user.privateKey = cryptoFields.encryptedPrivateKey;
+            user.privateKeyIV = cryptoFields.privateKeyIV;
+            user.privateKeyAuthTag = cryptoFields.privateKeyAuthTag;
+            user.token = cryptoFields.encryptedToken;
+            user.tokenIV = cryptoFields.tokenIV;
+            user.tokenAuthTag = cryptoFields.tokenAuthTag;
+            user.privateKeyDerivationSalt = cryptoFields.salt;
+
+            await user.save({ session });
+            console.log('✅ User updated with new crypto materials');
+        }
+
+        console.log('Registration - Crypto fields ready:', useExistingFields ? 'EXISTING' : 'NEW');
 
         // Create IPFSRegistration record for this election
         const ipfsRegistration = new IPFSRegistration({
@@ -291,20 +341,9 @@ export const registerForElection = async (req, res) => {
         await ipfsRegistration.save({ session });
         console.log('Registration - IPFSRegistration created');
 
-        // Update user with new encrypted keys and token for this election
-        user.publicKey = encryptedPublicKey;
-        user.publicKeyIV = publicKeyIV;
-        user.publicKeyAuthTag = publicKeyAuthTag;
-        user.privateKey = encryptedPrivateKey;
-        user.privateKeyIV = privateKeyIV;
-        user.privateKeyAuthTag = privateKeyAuthTag;
-        user.token = encryptedToken;
-        user.tokenIV = tokenIV;
-        user.tokenAuthTag = tokenAuthTag;
-        user.privateKeyDerivationSalt = salt;
-
-        await user.save({ session });
-        console.log('Registration - User updated with new crypto materials');
+        // ✅ FIX: DO NOT overwrite user's crypto fields!
+        // The user already has encrypted keys and token from initial registration
+        // We just need to mark them as accepted in the election
 
         // Update user's acceptance status in election
         existingUser.isAccepted = true;
@@ -345,12 +384,21 @@ export const registerForElection = async (req, res) => {
             await session.abortTransaction();
         }
         session.endSession();
-        
-        console.error('Register for election error:', error);
+
+        // Enhanced error logging
+        console.error('❌ ========================================');
+        console.error('❌ REGISTRATION ERROR DETAILS:');
+        console.error('❌ ========================================');
+        console.error('Error message:', error.message);
+        console.error('Error name:', error.name);
+        console.error('Error stack:', error.stack);
+        console.error('❌ ========================================');
+
         return res.status(500).json({
             success: false,
             message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };

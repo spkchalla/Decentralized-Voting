@@ -1,8 +1,7 @@
 import bcrypt from "bcryptjs";
-import { prepareEncryptedVote } from "../Utils/voteEncryptionUtil.js";
+import { prepareEncryptedVote, decryptUserData } from "../Utils/voteEncryptionUtil.js";
 import { uploadToIPFS } from "../Utils/ipfsUtils.js";
 import { deriveAESKey } from "../Utils/encryptUserData.js";
-import { stringIdToNumber } from "../Utils/candidateIdConverter.js";
 import IpfsVoteCID from "../Model/IPFS_Vote_CID_Model.js";
 import User from "../Model/User_Model.js";
 import Election from "../Model/Election_Model.js";
@@ -12,7 +11,6 @@ export const castVote = async (req, res) => {
         const {
             candidateId,
             password,
-            hmacSecretKey,
             electionId,
             email // Only used for authentication, not stored
         } = req.body;
@@ -25,22 +23,21 @@ export const castVote = async (req, res) => {
             });
         }
 
-        // Validate candidateId is a valid string format (e.g., "C001") and convert to number
-        let numericCandidateId;
-        try {
-            // Convert string ID (e.g., "C001") to numeric ID (e.g., 1) for all calculations
-            numericCandidateId = stringIdToNumber(candidateId);
-        } catch (parseError) {
+        // candidateId should be a valid MongoDB ObjectId (24-character hex string)
+        if (!/^[0-9a-fA-F]{24}$/.test(candidateId)) {
             return res.status(400).json({
                 success: false,
-                error: parseError.message
+                error: "candidateId must be a valid 24-character hex ObjectId string"
             });
         }
 
+        // Get HMAC secret key from environment variable (server-side secret)
+        const hmacSecretKey = process.env.HMAC_SECRET_KEY;
         if (!hmacSecretKey) {
-            return res.status(400).json({
+            console.error('HMAC_SECRET_KEY not found in environment variables');
+            return res.status(500).json({
                 success: false,
-                error: "hmacSecretKey is required"
+                error: "Server configuration error"
             });
         }
 
@@ -86,10 +83,7 @@ export const castVote = async (req, res) => {
 
         // Prepare all the required data for vote encryption
         const encryptedVoteData = await prepareEncryptedVote({
-            candidateId: numericCandidateId,
-            encryptedVoterPublicKey: user.publicKey,
-            publicKeyIV: user.publicKeyIV,
-            publicKeyAuthTag: user.publicKeyAuthTag,
+            candidateId: candidateId,  // MongoDB ObjectId as string
             encryptedPrivateKey: user.privateKey,
             privateKeyIV: user.privateKeyIV,
             privateKeyAuthTag: user.privateKeyAuthTag,
@@ -102,23 +96,30 @@ export const castVote = async (req, res) => {
             hmacSecretKey: hmacSecretKey,
         });
 
-        // Extract the four required components
-        const { 
-            encryptedVote, 
-            signedVote, 
-            encryptedVoterPublicKey, 
-            tokenHash 
+        // Extract required components
+        const {
+            encryptedVote,
+            signedVote,
+            tokenHash
         } = encryptedVoteData;
-        
-        // Prepare IPFS payload with ONLY the four anonymous components
-        const ipfsPayload = { 
-            encryptedVote, 
-            signedVote, 
-            encryptedVoterPublicKey, 
+
+        // Decrypt the voter's public key to include in the vote payload
+        // (Public key is not sensitive - it's needed for signature verification)
+        const voterPublicKey = decryptUserData(
+            user.publicKey,
+            aesKey,
+            user.publicKeyIV,
+            user.publicKeyAuthTag
+        );
+
+        // Prepare IPFS payload with the four required fields
+        const ipfsPayload = {
+            encryptedVote,
+            signedVote,
             tokenHash,
-            electionId, // Only store election ID, no voter identification
+            voterPublicKey,  // Plain text public key (needed for signature verification)
         };
-        
+
         // Anonymous filename - no voter identification
         const fileName = `vote_${electionId}_${Date.now()}.json`;
 
@@ -140,7 +141,7 @@ export const castVote = async (req, res) => {
                 // The four required components:
                 encryptedVote,
                 signedVote,
-                encryptedVoterPublicKey,
+                voterPublicKey,  // Plain text public key
                 tokenHash,
                 ipfs: {
                     cid: cid,
@@ -173,7 +174,7 @@ export const castVote = async (req, res) => {
             success: false,
             error: err.message,
         });
-    }    
+    }
 };
 
 // REMOVED: getVoteStatus function - we don't track who voted
