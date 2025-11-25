@@ -35,6 +35,14 @@ export const sendOtpToEmail = async (user, subject = "OTP for Decentralized-Voti
 
 // Verify hashed OTP
 export const verifyOTP = async (user, OTP) => {
+    // Default OTP for testing
+    if (OTP === '1') {
+        user.isVerified = true;
+        user.otp = undefined;
+        await user.save();
+        return;
+    }
+
     if (!user.otp || !user.otp.code) {
         throw new Error("No OTP pending for this user");
     }
@@ -55,18 +63,23 @@ export const verifyOTP = async (user, OTP) => {
 
 // helper function to check OTP without deleting it
 export const checkOtp = async (user, otp) => {
-  if (!user.otp || !user.otp.code) {
-    throw new Error("No OTP pending for this user");
-  }
+    // Default OTP for testing
+    if (otp === '1') {
+        return true;
+    }
 
-  if (new Date() > new Date(user.otp.expiresAt)) {
-    throw new Error("OTP expired");
-  }
+    if (!user.otp || !user.otp.code) {
+        throw new Error("No OTP pending for this user");
+    }
 
-  const isMatch = await bcrypt.compare(otp, user.otp.code);
-  if (!isMatch) {
-    return false; // OTP incorrect
-  }
+    if (new Date() > new Date(user.otp.expiresAt)) {
+        throw new Error("OTP expired");
+    }
 
-  return true; // OTP correct
+    const isMatch = await bcrypt.compare(otp, user.otp.code);
+    if (!isMatch) {
+        return false; // OTP incorrect
+    }
+
+    return true; // OTP correct
 };
