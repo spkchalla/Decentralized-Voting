@@ -93,6 +93,7 @@ export const castVote = async (req, res) => {
             encryptedToken: user.token,
             tokenIV: user.tokenIV,
             tokenAuthTag: user.tokenAuthTag,
+            hmacSecretKey: hmacSecretKey  // Pass the HMAC secret key
         });
 
         // Extract required components

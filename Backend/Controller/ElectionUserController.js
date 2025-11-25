@@ -1,6 +1,8 @@
 import Election from '../Model/Election_Model.js';
 import User from '../Model/User_Model.js';
 import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
+import Candidate from '../Model/Candidate_Model.js'; // Ensure Candidate model is registered
+import Party from '../Model/Party_Model.js'; // Ensure Party model is registered
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { generateCryptoFields } from '../Utils/encryptUserData.js';
@@ -21,8 +23,8 @@ export const getUserElectionDashboard = async (req, res) => {
         const userId = req.user._id;
         console.log('Dashboard - User ID:', userId);
 
-        // Find user to check verification status
-        const user = await User.findById(userId).select('isVerified voterId name email');
+        // Find user to check verification status and pincode
+        const user = await User.findById(userId).select('isVerified voterId name email pincode');
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -30,9 +32,14 @@ export const getUserElectionDashboard = async (req, res) => {
             });
         }
 
-        // Find all elections where the user is included in the users array
+        console.log('Dashboard - User pincode:', user.pincode);
+
+        // Find elections that match user's pincode OR where user is already registered
         const elections = await Election.find({
-            'users.user': userId
+            $or: [
+                { pinCodes: user.pincode },  // Active/upcoming elections for user's area
+                { 'users.user': userId }      // Elections user is already registered for
+            ]
         })
             .populate({
                 path: 'users.user',
@@ -61,25 +68,35 @@ export const getUserElectionDashboard = async (req, res) => {
         // Process elections data
         const processedElections = elections.map(election => {
             // Try different ways to find the user data
+            // userId is a string from req.user._id
+            const userIdString = userId.toString();
+
+            console.log(`\n=== Processing Election: ${election.title} ===`);
+            console.log('Current userId (string):', userIdString);
+            console.log('Users in election:', election.users.map(u => ({
+                userId: u.user?._id?.toString() || u.user?.toString(),
+                isAccepted: u.isAccepted
+            })));
+
             const userData = election.users.find(userEntry => {
-                if (userEntry.user && userEntry.user._id) {
-                    return userEntry.user._id.toString() === userId;
-                }
-                // If population failed, check the raw ObjectId (only if user is not null)
-                return userEntry.user && userEntry.user.toString() === userId;
+                // Handle both populated and non-populated user field
+                const entryUserId = userEntry.user?._id?.toString() || userEntry.user?.toString();
+                console.log(`Comparing: ${entryUserId} === ${userIdString}`, entryUserId === userIdString);
+                return entryUserId === userIdString;
             });
 
             console.log(`Dashboard - Election ${election._id}:`, {
                 userFound: !!userData,
                 userEntry: userData,
-                userIdInElection: userData?.user?._id?.toString() || userData?.user?.toString(),
-                currentUserId: userId
+                isAccepted: userData?.isAccepted
             });
 
             const isAccepted = userData ? userData.isAccepted : false;
             const registrationStatus = userData ?
                 (userData.isAccepted ? 'registered' : 'pending') :
                 'not_registered';
+
+            console.log(`Final status for ${election.title}:`, { isAccepted, registrationStatus });
 
             return {
                 _id: election._id,
@@ -98,8 +115,8 @@ export const getUserElectionDashboard = async (req, res) => {
                     isAccepted: isAccepted,
                     registrationStatus: registrationStatus
                 },
-                // Registration logic
-                canRegister: userData ? !userData.isAccepted : false,
+                // Registration logic - can register if not yet registered
+                canRegister: !userData,
                 needsVerification: !user.isVerified,
                 // Voting logic
                 canVote: election.status === 'Active' && isAccepted && user.isVerified,
@@ -341,9 +358,9 @@ export const registerForElection = async (req, res) => {
 
         // Create IPFSRegistration record for this election
         try {
-            const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+            const fp = (s) => (s && s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-6)}` : s);
             console.log(`REG_USER_CREATE: user=${userId.toString()} tokenHash=${fp(tokenHash)} publicKeyHash=${fp(publicKeyHash)}`);
-        } catch (e) {}
+        } catch (e) { }
 
         const ipfsRegistration = new IPFSRegistration({
             tokenHash,
@@ -425,7 +442,14 @@ export const getElectionDetails = async (req, res) => {
 
         const election = await Election.findById(electionId)
             .populate('users.user', 'voterId name email isVerified')
-            .populate('candidates.candidate', 'candidate_id name party')
+            .populate({
+                path: 'candidates.candidate',
+                select: 'candidate_id name party',
+                populate: {
+                    path: 'party',
+                    select: 'name symbol'
+                }
+            })
             .populate('officers', 'name email')
             .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password');
 

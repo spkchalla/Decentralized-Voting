@@ -16,6 +16,7 @@ import Elections from './pages/Elections';
 import Admin from './pages/Admin';
 import Candidate from './pages/Candidate';
 import Party from './pages/Party';
+import VotePage from './pages/VotePage';
 
 
 const App = () => {
@@ -29,13 +30,14 @@ const App = () => {
           <Route path="/email-verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/otp-verification" element={<Otp />} />
-          <Route path="/profile" element={<Profile/>} />
-          <Route path = "/*" element = {<PageNotFound/>}/>
-          <Route path = "/approval" element = {<Approval/>}/>
-          <Route path = "/elections" element = {<Elections/>}/>
-          <Route path = "/admin" element = {<Admin/>}/>
-          <Route path = "/candidates" element = {<Candidate/>}/>
-          <Route path = "/parties" element = {<Party/>}/>
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/vote/:electionId" element={<VotePage />} />
+          <Route path="/*" element={<PageNotFound />} />
+          <Route path="/approval" element={<Approval />} />
+          <Route path="/elections" element={<Elections />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/candidates" element={<Candidate />} />
+          <Route path="/parties" element={<Party />} />
         </Routes>
       </AuthProvider>
 
