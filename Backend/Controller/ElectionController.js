@@ -160,9 +160,9 @@ export const createElection = async (req, res) => {
 
                 // Debug: log registration hashes (short fingerprints)
                 try {
-                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0,6)}...${s.slice(-6)}` : s);
+                    const fp = (s) => (s && s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-6)}` : s);
                     console.log(`REG_CREATE: user=${user._id} tokenHash=${fp(userSpecificTokenHash)} publicKeyHash=${fp(userSpecificPublicKeyHash)} format=fullPEM`);
-                } catch (e) {}
+                } catch (e) { }
 
                 // Create IPFSRegistration document
                 const registration = new IPFSRegistration({
@@ -277,6 +277,218 @@ export const createElection = async (req, res) => {
             success: false,
             message: "Internal server error",
             error: process.env.NODE_ENV === "development" ? error.message : undefined
+        });
+    }
+};
+
+// Get all elections
+export const getAllElections = async (req, res) => {
+    try {
+        const elections = await Election.find()
+            .populate('officers', 'name email')
+            .populate('users.user', 'voterId name email pincode')
+            .populate('candidates.candidate', 'candidate_id name')
+            .select('-password -ecPublicKey -ecPrivateKey -ecPrivateKeyIV -ecPrivateKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            message: "Elections retrieved successfully",
+            elections: elections
+        });
+
+    } catch (error) {
+        console.error("Get all elections error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * Update election status based on current time
+ * Automatically sets status to:
+ * - "Not Yet Started" if current time < startDateTime
+ * - "Active" if startDateTime <= current time < endDateTime
+ * - "Finished" if current time >= endDateTime
+ */
+export const updateElectionStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Find the election
+        const election = await Election.findById(id);
+        if (!election) {
+            return res.status(404).json({
+                success: false,
+                message: "Election not found"
+            });
+        }
+
+        const oldStatus = election.status;
+        const now = new Date();
+        const startTime = new Date(election.startDateTime);
+        const endTime = new Date(election.endDateTime);
+
+        let newStatus;
+        if (now < startTime) {
+            newStatus = "Not Yet Started";
+        } else if (now >= startTime && now < endTime) {
+            newStatus = "Active";
+        } else {
+            newStatus = "Finished";
+        }
+
+        // Check if status actually changed
+        if (oldStatus === newStatus) {
+            return res.status(200).json({
+                success: true,
+                message: `Election status is already: ${newStatus}`,
+                statusChanged: false,
+                election: {
+                    _id: election._id,
+                    eid: election.eid,
+                    title: election.title,
+                    status: election.status,
+                    startDateTime: election.startDateTime,
+                    endDateTime: election.endDateTime
+                }
+            });
+        }
+
+        // Update the status
+        election.status = newStatus;
+        await election.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Election status updated from "${oldStatus}" to "${newStatus}"`,
+            statusChanged: true,
+            oldStatus: oldStatus,
+            newStatus: newStatus,
+            election: {
+                _id: election._id,
+                eid: election.eid,
+                title: election.title,
+                status: election.status,
+                startDateTime: election.startDateTime,
+                endDateTime: election.endDateTime
+            }
+        });
+    } catch (error) {
+        console.error("Error in updateElectionStatus:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update election status",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Force start an election manually (admin override)
+ * Sets election status to "Active" and start time to current time
+ */
+export const forceStartElection = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Find the election
+        const election = await Election.findById(id);
+        if (!election) {
+            return res.status(404).json({
+                success: false,
+                message: "Election not found"
+            });
+        }
+
+        const oldStatus = election.status;
+        const oldStartTime = election.startDateTime;
+        const now = new Date();
+
+        // Force set to Active and update start time to now
+        election.status = "Active";
+        election.startDateTime = now;
+        await election.save();
+
+        return res.status(200).json({
+            success: true,
+            message: oldStatus === "Active"
+                ? "Election is already Active"
+                : `Election manually started - status changed from "${oldStatus}" to "Active" and start time set to now`,
+            statusChanged: oldStatus !== "Active",
+            oldStatus: oldStatus,
+            newStatus: "Active",
+            oldStartTime: oldStartTime,
+            newStartTime: now,
+            election: {
+                _id: election._id,
+                eid: election.eid,
+                title: election.title,
+                status: election.status,
+                startDateTime: election.startDateTime,
+                endDateTime: election.endDateTime
+            }
+        });
+    } catch (error) {
+        console.error("Error in forceStartElection:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to force start election",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Force finish an election manually (admin override)
+ * Sets election status to "Finished" regardless of end time
+ */
+export const forceFinishElection = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Find the election
+        const election = await Election.findById(id);
+        if (!election) {
+            return res.status(404).json({
+                success: false,
+                message: "Election not found"
+            });
+        }
+
+        const oldStatus = election.status;
+
+        // Force set to Finished
+        election.status = "Finished";
+        await election.save();
+
+        return res.status(200).json({
+            success: true,
+            message: oldStatus === "Finished"
+                ? "Election is already Finished"
+                : `Election manually closed - status changed from "${oldStatus}" to "Finished"`,
+            statusChanged: oldStatus !== "Finished",
+            oldStatus: oldStatus,
+            newStatus: "Finished",
+            election: {
+                _id: election._id,
+                eid: election.eid,
+                title: election.title,
+                status: election.status,
+                startDateTime: election.startDateTime,
+                endDateTime: election.endDateTime
+            }
+        });
+    } catch (error) {
+        console.error("Error in forceFinishElection:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to force finish election",
+            error: error.message
         });
     }
 };

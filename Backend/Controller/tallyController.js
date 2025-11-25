@@ -39,6 +39,16 @@ export const runTally = async (req, res) => {
       });
     }
 
+    // Check if election has finished
+    if (election.status !== 'Finished') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot run tally - Election status is "${election.status}". Tally can only be run on Finished elections.`,
+        currentStatus: election.status,
+        allowedStatus: 'Finished'
+      });
+    }
+
     // Decrypt the election's private key
     const ecPrivateKeyPem = await decryptElectionPrivateKey(
       election.ecPrivateKey,
@@ -116,8 +126,8 @@ export const runTally = async (req, res) => {
         // Step 2: Duplicate check
         const { tokenHash, voterPublicKey } = votePayload;
 
-        // Compute hash of voter's public key (Must match Registration logic: simple SHA-256)
-        const pubKeyHash = crypto.createHash('sha256').update(voterPublicKey).digest('hex');
+        // Compute hash of voter's public key (Must match Registration logic: HMAC-SHA256)
+        const pubKeyHash = hmacSHA256(voterPublicKey, process.env.HMAC_SECRET_KEY);
 
         // Check if this registration has already been used
         const registration = await IPFSRegistration.findOne({
@@ -127,11 +137,81 @@ export const runTally = async (req, res) => {
         });
 
         if (!registration) {
+          // Determine the SPECIFIC reason for failure
+          let specificReason = "Registration not found";
+          let failureDetails = {};
+
+          // Check if token exists for this election (regardless of public key)
+          const tokenExists = await IPFSRegistration.findOne({
+            tokenHash: tokenHash,
+            election: electionId,
+          });
+
+          // Check if public key exists for this election (regardless of token)
+          const publicKeyExists = await IPFSRegistration.findOne({
+            publicKeyHash: pubKeyHash,
+            election: electionId,
+          });
+
+          if (!tokenExists && !publicKeyExists) {
+            // Neither token nor public key found - user likely not registered at all
+            specificReason = "User not registered for this election";
+            failureDetails = {
+              providedTokenHash: tokenHash.substring(0, 16) + '...',
+              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
+              actualIssue: "No registration record found with this token or public key for this election",
+              suggestion: "User may not have registered, or registration was unsuccessful"
+            };
+          } else if (tokenExists && !publicKeyExists) {
+            // Token found but public key doesn't match
+            specificReason = "Public key mismatch - Token found but belongs to different user";
+            failureDetails = {
+              issue: "CRYPTOGRAPHIC_KEY_MISMATCH",
+              providedTokenHash: tokenHash.substring(0, 16) + '...',
+              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
+              expectedPublicKeyHash: tokenExists.publicKeyHash.substring(0, 16) + '...',
+              fullProvidedPubKeyHash: pubKeyHash,
+              fullExpectedPubKeyHash: tokenExists.publicKeyHash,
+              registrationId: tokenExists._id.toString(),
+              registeredUserId: tokenExists.user?.toString() || 'Unknown',
+              actualIssue: "Token is valid but public key doesn't match the registered public key",
+              technicalExplanation: `The vote contains a valid token that is registered for this election, but the public key used to sign the vote (hash: ${pubKeyHash.substring(0, 32)}...) does not match the public key registered with this token (hash: ${tokenExists.publicKeyHash.substring(0, 32)}...). This indicates either: (1) The voter is using a different private key than the one generated during registration, (2) An attempt to cast a vote using someone else's token, or (3) The voter's cryptographic keys were regenerated or corrupted.`,
+              suggestion: "Vote may be using wrong private key or attempting vote manipulation",
+              securityImplication: "HIGH - Possible vote manipulation attempt or compromised voter credentials",
+              debugInfo: {
+                tokenMatched: true,
+                publicKeyMatched: false,
+                registrationFound: true,
+                keyHashComparison: `Provided: ${pubKeyHash.substring(0, 40)}... vs Expected: ${tokenExists.publicKeyHash.substring(0, 40)}...`
+              }
+            };
+          } else if (!tokenExists && publicKeyExists) {
+            // Public key found but token doesn't match
+            specificReason = "Token mismatch - Public key found but token is different";
+            failureDetails = {
+              providedTokenHash: tokenHash.substring(0, 16) + '...',
+              expectedTokenHash: publicKeyExists.tokenHash.substring(0, 16) + '...',
+              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
+              actualIssue: "Public key is valid but token doesn't match the registered token",
+              suggestion: "Vote may be using wrong token or attempting token reuse"
+            };
+          } else {
+            // Both exist separately but not together - bizarre case
+            specificReason = "Token and public key exist but don't belong to same registration";
+            failureDetails = {
+              providedTokenHash: tokenHash.substring(0, 16) + '...',
+              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
+              actualIssue: "Both token and public key are registered but for different users",
+              suggestion: "Potential vote manipulation attempt or data corruption"
+            };
+          }
+
           invalidVotes++;
           voteDetails.push({
             cid: voteRecord.cid,
             status: "Invalid",
-            reason: "Registration not found for this vote (Token/Key mismatch or not registered for this election)"
+            reason: specificReason,
+            technicalDetails: failureDetails
           });
           continue;
         }
@@ -141,7 +221,14 @@ export const runTally = async (req, res) => {
           voteDetails.push({
             cid: voteRecord.cid,
             status: "Duplicate",
-            reason: "Voter has already cast a vote in this election"
+            reason: "Voter has already cast a vote in this election",
+            technicalDetails: {
+              tokenHash: tokenHash.substring(0, 16) + '...',
+              publicKeyHash: pubKeyHash.substring(0, 16) + '...',
+              registrationId: registration._id.toString(),
+              previouslyVoted: true,
+              registrationStatus: 'Already marked as voted in database'
+            }
           });
           continue; // Skip duplicate vote
         }
@@ -190,7 +277,16 @@ export const runTally = async (req, res) => {
           cid: voteRecord.cid,
           status: "Valid",
           reason: "Vote successfully decrypted, verified, and counted",
-          candidateId: candidateObjectIdHex // Optional: include who they voted for (admin only)
+          candidateId: candidateObjectIdHex,
+          candidateName: candidate.name,
+          technicalDetails: {
+            tokenHash: tokenHash.substring(0, 16) + '...',
+            publicKeyHash: pubKeyHash.substring(0, 16) + '...',
+            signatureVerified: true,
+            decryptionMethod: 'RSA-OAEP with Election Commission private key',
+            registrationId: registration._id.toString(),
+            voteEncryptionValid: true
+          }
         });
 
       } catch (err) {
@@ -293,6 +389,16 @@ export const getTallyResults = async (req, res) => {
       return res.status(404).json({
         success: false,
         error: "Election not found",
+      });
+    }
+
+    // Check if election has finished
+    if (election.status !== 'Finished') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot view results - Election status is "${election.status}". Results can only be viewed for Finished elections.`,
+        currentStatus: election.status,
+        allowedStatus: 'Finished'
       });
     }
 
