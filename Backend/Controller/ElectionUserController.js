@@ -1,6 +1,8 @@
 import Election from '../Model/Election_Model.js';
 import User from '../Model/User_Model.js';
 import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
+import Candidate from '../Model/Candidate_Model.js'; // Ensure Candidate model is registered
+import Party from '../Model/Party_Model.js'; // Ensure Party model is registered
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { generateCryptoFields } from '../Utils/encryptUserData.js';
@@ -440,7 +442,14 @@ export const getElectionDetails = async (req, res) => {
 
         const election = await Election.findById(electionId)
             .populate('users.user', 'voterId name email isVerified')
-            .populate('candidates.candidate', 'candidate_id name party')
+            .populate({
+                path: 'candidates.candidate',
+                select: 'candidate_id name party',
+                populate: {
+                    path: 'party',
+                    select: 'name symbol'
+                }
+            })
             .populate('officers', 'name email')
             .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password');
 

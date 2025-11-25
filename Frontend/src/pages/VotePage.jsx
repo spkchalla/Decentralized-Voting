@@ -180,8 +180,8 @@ const VotePage = () => {
                                                 <div
                                                     key={candidate._id}
                                                     className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 ${selectedCandidate === candidate._id
-                                                            ? 'border-blue-500 bg-blue-50'
-                                                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                                        ? 'border-blue-500 bg-blue-50'
+                                                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
                                                         }`}
                                                     onClick={() => setSelectedCandidate(candidate._id)}
                                                 >
@@ -196,7 +196,12 @@ const VotePage = () => {
                                                         />
                                                         <div className="flex-1">
                                                             <h3 className="text-lg font-bold text-gray-800">{candidate.name}</h3>
-                                                            <p className="text-sm text-gray-600">ID: {candidate.candidate_id}</p>
+                                                            <div className="text-sm text-gray-600 mt-1">
+                                                                <p>Party: <span className="font-medium">{candidate.party?.name || 'Independent'}</span></p>
+                                                                {candidate.party?.symbol && (
+                                                                    <p>Symbol: <span className="font-medium text-lg ml-1">{candidate.party.symbol}</span></p>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
