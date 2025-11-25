@@ -932,6 +932,66 @@ const Elections = () => {
                   Vote Validation Details
                 </ModalHeader>
                 <ModalBody className="max-h-[70vh]">
+                  {/* Results Summary */}
+                  {validationData.winner && (
+                    <div className="mb-6 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-xl border border-indigo-500/30 p-5">
+                      <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <span className="text-2xl">🏆</span> Election Results
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Winner Card */}
+                        <div className="bg-slate-900/60 rounded-lg p-4 border border-indigo-500/30 flex flex-col items-center justify-center text-center">
+                          <span className="text-indigo-300 text-sm uppercase tracking-wider font-semibold mb-2">Winner</span>
+                          <div className="text-2xl font-bold text-white mb-1">{validationData.winner.name}</div>
+                          <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+                            {validationData.winner.voteCount} Votes
+                          </div>
+                        </div>
+
+                        {/* Margin Card */}
+                        <div className="bg-slate-900/60 rounded-lg p-4 border border-purple-500/30 flex flex-col items-center justify-center text-center">
+                          <span className="text-purple-300 text-sm uppercase tracking-wider font-semibold mb-2">Victory Margin</span>
+                          <div className="text-4xl font-black text-white mb-1">+{validationData.winner.margin}</div>
+                          <div className="text-sm text-slate-400">votes ahead of runner-up</div>
+                        </div>
+                      </div>
+
+                      {/* Candidate Table */}
+                      <div className="mt-6 overflow-hidden rounded-lg border border-slate-700">
+                        <table className="w-full text-left text-sm text-slate-300">
+                          <thead className="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400">
+                            <tr>
+                              <th className="px-4 py-3">Rank</th>
+                              <th className="px-4 py-3">Candidate</th>
+                              <th className="px-4 py-3 text-right">Votes</th>
+                              <th className="px-4 py-3 text-right">% Share</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700 bg-slate-800/40">
+                            {validationData.results.map((candidate, index) => {
+                              const totalValidVotes = validationData.statistics.validVotes;
+                              const percentage = totalValidVotes > 0
+                                ? ((candidate.voteCount / totalValidVotes) * 100).toFixed(1)
+                                : 0;
+
+                              return (
+                                <tr key={candidate._id} className={index === 0 ? "bg-indigo-900/20" : ""}>
+                                  <td className="px-4 py-3 font-mono">
+                                    {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`}
+                                  </td>
+                                  <td className="px-4 py-3 font-medium text-white">{candidate.name}</td>
+                                  <td className="px-4 py-3 text-right font-bold">{candidate.voteCount}</td>
+                                  <td className="px-4 py-3 text-right text-slate-400">{percentage}%</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Statistics Summary */}
                   <div className="grid grid-cols-4 gap-4 mb-6">
                     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 text-center">

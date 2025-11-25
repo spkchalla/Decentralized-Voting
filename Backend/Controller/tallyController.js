@@ -330,6 +330,14 @@ export const runTally = async (req, res) => {
     // Sort results by vote count (descending)
     results.sort((a, b) => b.voteCount - a.voteCount);
 
+    // Calculate Margin
+    let margin = 0;
+    if (results.length > 0) {
+      const winnerVotes = results[0].voteCount;
+      const runnerUpVotes = results.length > 1 ? results[1].voteCount : 0;
+      margin = winnerVotes - runnerUpVotes;
+    }
+
     // Prepare winner details
     let winnerDetails = null;
     if (winner) {
@@ -341,6 +349,7 @@ export const runTally = async (req, res) => {
           _id: winnerCandidate._id,
           name: winnerCandidate.name,
           voteCount: maxVotes,
+          margin: margin
         };
       }
     }
