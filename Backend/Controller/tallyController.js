@@ -1,4 +1,5 @@
 import IpfsVoteCID from "../Model/IPFS_Vote_CID_Model.js";
+import IpfsRegistrationCID from "../Model/IPFS_Registration_CID_Model.js";
 import IPFSRegistration from "../Model/IPFSRegistration_Model.js";
 import Election from "../Model/Election_Model.js";
 import Candidate from "../Model/Candidate_Model.js";
@@ -52,7 +53,7 @@ export const runTally = async (req, res) => {
     // Decrypt the election's private key
     const ecPrivateKeyPem = await decryptElectionPrivateKey(
       election.ecPrivateKey,
-      election.ecprivateKeyDerivationSalt,
+      election.ecPrivateKeyDerivationSalt,
       election.ecPrivateKeyIV,
       election.ecPrivateKeyAuthTag,
       electionPassword
@@ -83,6 +84,44 @@ export const runTally = async (req, res) => {
     await Candidate.updateMany({ currentElection: electionId }, { votes: 0 });
     await IPFSRegistration.updateMany({ election: electionId }, { hasVoted: false });
     console.log("Tally State Reset: Cleared vote counts and hasVoted flags.");
+
+    // --- NEW: Fetch Registration Data from IPFS ---
+    console.log("Fetching registration data from IPFS...");
+    const registrationCids = await IpfsRegistrationCID.find({ electionId });
+    
+    // Map to store valid registrations: tokenHash -> { publicKeyHash, hasVoted, mongoId }
+    const validRegistrations = new Map();
+
+    // Helper to fetch and parse registration
+    const fetchRegistration = async (regCidDoc) => {
+        try {
+            const { data } = await fetchFromIPFS(regCidDoc.cid);
+            if (data && data.tokenHash && data.publicKeyHash) {
+                // Find corresponding Mongo ID for status updates
+                // We still need the Mongo ID to update 'hasVoted' status in DB
+                const mongoReg = await IPFSRegistration.findOne({ 
+                    tokenHash: data.tokenHash, 
+                    election: electionId 
+                }).select('_id hasVoted');
+
+                if (mongoReg) {
+                    validRegistrations.set(data.tokenHash, {
+                        publicKeyHash: data.publicKeyHash,
+                        hasVoted: false, // Reset state as per Tally start
+                        mongoId: mongoReg._id
+                    });
+                }
+            }
+        } catch (err) {
+            console.error(`Failed to fetch registration CID ${regCidDoc.cid}:`, err.message);
+        }
+    };
+
+    // Parallel fetch with concurrency limit (optional, simple Promise.all for now)
+    // For very large elections, we might want to batch this
+    await Promise.all(registrationCids.map(fetchRegistration));
+    console.log(`Loaded ${validRegistrations.size} valid registrations from IPFS.`);
+    // ----------------------------------------------
 
     // Process each vote
     for (const voteRecord of voteRecords) {
@@ -130,93 +169,41 @@ export const runTally = async (req, res) => {
         const pubKeyHash = hmacSHA256(voterPublicKey, process.env.HMAC_SECRET_KEY);
 
         // Check if this registration has already been used
-        const registration = await IPFSRegistration.findOne({
-          tokenHash: tokenHash,
-          publicKeyHash: pubKeyHash,
-          election: electionId,
-        });
+        // NEW: Check against in-memory map populated from IPFS
+        const registrationData = validRegistrations.get(tokenHash);
 
-        if (!registration) {
-          // Determine the SPECIFIC reason for failure
-          let specificReason = "Registration not found";
-          let failureDetails = {};
-
-          // Check if token exists for this election (regardless of public key)
-          const tokenExists = await IPFSRegistration.findOne({
-            tokenHash: tokenHash,
-            election: electionId,
-          });
-
-          // Check if public key exists for this election (regardless of token)
-          const publicKeyExists = await IPFSRegistration.findOne({
-            publicKeyHash: pubKeyHash,
-            election: electionId,
-          });
-
-          if (!tokenExists && !publicKeyExists) {
-            // Neither token nor public key found - user likely not registered at all
-            specificReason = "User not registered for this election";
-            failureDetails = {
-              providedTokenHash: tokenHash.substring(0, 16) + '...',
-              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
-              actualIssue: "No registration record found with this token or public key for this election",
-              suggestion: "User may not have registered, or registration was unsuccessful"
-            };
-          } else if (tokenExists && !publicKeyExists) {
-            // Token found but public key doesn't match
-            specificReason = "Public key mismatch - Token found but belongs to different user";
-            failureDetails = {
-              issue: "CRYPTOGRAPHIC_KEY_MISMATCH",
-              providedTokenHash: tokenHash.substring(0, 16) + '...',
-              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
-              expectedPublicKeyHash: tokenExists.publicKeyHash.substring(0, 16) + '...',
-              fullProvidedPubKeyHash: pubKeyHash,
-              fullExpectedPubKeyHash: tokenExists.publicKeyHash,
-              registrationId: tokenExists._id.toString(),
-              registeredUserId: tokenExists.user?.toString() || 'Unknown',
-              actualIssue: "Token is valid but public key doesn't match the registered public key",
-              technicalExplanation: `The vote contains a valid token that is registered for this election, but the public key used to sign the vote (hash: ${pubKeyHash.substring(0, 32)}...) does not match the public key registered with this token (hash: ${tokenExists.publicKeyHash.substring(0, 32)}...). This indicates either: (1) The voter is using a different private key than the one generated during registration, (2) An attempt to cast a vote using someone else's token, or (3) The voter's cryptographic keys were regenerated or corrupted.`,
-              suggestion: "Vote may be using wrong private key or attempting vote manipulation",
-              securityImplication: "HIGH - Possible vote manipulation attempt or compromised voter credentials",
-              debugInfo: {
-                tokenMatched: true,
-                publicKeyMatched: false,
-                registrationFound: true,
-                keyHashComparison: `Provided: ${pubKeyHash.substring(0, 40)}... vs Expected: ${tokenExists.publicKeyHash.substring(0, 40)}...`
-              }
-            };
-          } else if (!tokenExists && publicKeyExists) {
-            // Public key found but token doesn't match
-            specificReason = "Token mismatch - Public key found but token is different";
-            failureDetails = {
-              providedTokenHash: tokenHash.substring(0, 16) + '...',
-              expectedTokenHash: publicKeyExists.tokenHash.substring(0, 16) + '...',
-              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
-              actualIssue: "Public key is valid but token doesn't match the registered token",
-              suggestion: "Vote may be using wrong token or attempting token reuse"
-            };
-          } else {
-            // Both exist separately but not together - bizarre case
-            specificReason = "Token and public key exist but don't belong to same registration";
-            failureDetails = {
-              providedTokenHash: tokenHash.substring(0, 16) + '...',
-              providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
-              actualIssue: "Both token and public key are registered but for different users",
-              suggestion: "Potential vote manipulation attempt or data corruption"
-            };
-          }
-
+        if (!registrationData) {
+          // Token not found in valid registrations (from IPFS)
           invalidVotes++;
           voteDetails.push({
             cid: voteRecord.cid,
             status: "Invalid",
-            reason: specificReason,
-            technicalDetails: failureDetails
+            reason: "Registration not found in IPFS data",
+            technicalDetails: {
+                providedTokenHash: tokenHash.substring(0, 16) + '...',
+                issue: "Token hash not found in valid registrations loaded from IPFS"
+            }
           });
           continue;
         }
 
-        if (registration.hasVoted) {
+        // Verify Public Key Hash
+        if (registrationData.publicKeyHash !== pubKeyHash) {
+             invalidVotes++;
+             voteDetails.push({
+                cid: voteRecord.cid,
+                status: "Invalid",
+                reason: "Public key mismatch",
+                technicalDetails: {
+                    providedPublicKeyHash: pubKeyHash.substring(0, 16) + '...',
+                    expectedPublicKeyHash: registrationData.publicKeyHash.substring(0, 16) + '...',
+                    issue: "Public key hash does not match registration data from IPFS"
+                }
+             });
+             continue;
+        }
+
+        if (registrationData.hasVoted) {
           duplicateVotes++;
           voteDetails.push({
             cid: voteRecord.cid,
@@ -224,10 +211,8 @@ export const runTally = async (req, res) => {
             reason: "Voter has already cast a vote in this election",
             technicalDetails: {
               tokenHash: tokenHash.substring(0, 16) + '...',
-              publicKeyHash: pubKeyHash.substring(0, 16) + '...',
-              registrationId: registration._id.toString(),
-              previouslyVoted: true,
-              registrationStatus: 'Already marked as voted in database'
+              registrationId: registrationData.mongoId.toString(),
+              previouslyVoted: true
             }
           });
           continue; // Skip duplicate vote
@@ -269,8 +254,12 @@ export const runTally = async (req, res) => {
         voteCounts.set(candidateObjectIdHex, currentCount + 1);
 
         // Step 6: Mark registration as used
-        registration.hasVoted = true;
-        await registration.save();
+        // Step 6: Mark registration as used
+        // Update in-memory map
+        registrationData.hasVoted = true;
+        
+        // Update MongoDB to keep it in sync (as requested)
+        await IPFSRegistration.findByIdAndUpdate(registrationData.mongoId, { hasVoted: true });
 
         validVotes++;
         voteDetails.push({
@@ -284,7 +273,9 @@ export const runTally = async (req, res) => {
             publicKeyHash: pubKeyHash.substring(0, 16) + '...',
             signatureVerified: true,
             decryptionMethod: 'RSA-OAEP with Election Commission private key',
-            registrationId: registration._id.toString(),
+            signatureVerified: true,
+            decryptionMethod: 'RSA-OAEP with Election Commission private key',
+            registrationId: registrationData.mongoId.toString(),
             voteEncryptionValid: true
           }
         });

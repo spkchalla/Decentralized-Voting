@@ -1,6 +1,7 @@
 import Election from '../Model/Election_Model.js';
 import User from '../Model/User_Model.js';
 import IPFSRegistration from '../Model/IPFSRegistration_Model.js';
+import IpfsRegistrationCID from '../Model/IPFS_Registration_CID_Model.js';
 import Candidate from '../Model/Candidate_Model.js'; // Ensure Candidate model is registered
 import Party from '../Model/Party_Model.js'; // Ensure Party model is registered
 import mongoose from 'mongoose';
@@ -47,7 +48,7 @@ export const getUserElectionDashboard = async (req, res) => {
             })
             .populate('candidates.candidate', 'candidate_id name')
             .populate('officers', 'name email')
-            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password')
+            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecPrivateKeyDerivationSalt -password')
             .sort({ createdAt: -1 });
 
         console.log('Dashboard - Found elections count:', elections.length);
@@ -372,6 +373,27 @@ export const registerForElection = async (req, res) => {
         await ipfsRegistration.save({ session });
         console.log('Registration - IPFSRegistration created');
 
+        // Prepare IPFS payload for registration CID
+        const ipfsPayload = {
+            tokenHash,
+            publicKeyHash,
+            electionId
+        };
+
+        const fileName = `registration_${electionId}.json`;
+
+        // Upload to IPFS
+        const { IpfsHash: cid, url } = await uploadToIPFS(ipfsPayload, fileName);
+
+        // Store CID in database
+        await IpfsRegistrationCID.create([{
+            cid: cid,
+            link: url,
+            electionId: electionId
+        }], { session });
+
+        console.log('Registration - IpfsRegistrationCID created');
+
         // ✅ FIX: DO NOT overwrite user's crypto fields!
         // The user already has encrypted keys and token from initial registration
         // We just need to mark them as accepted in the election
@@ -391,7 +413,7 @@ export const registerForElection = async (req, res) => {
         const updatedElection = await Election.findById(electionId)
             .populate('users.user', 'voterId name email isVerified')
             .populate('candidates.candidate', 'candidate_id name')
-            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password');
+            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecPrivateKeyDerivationSalt -password');
 
         return res.status(200).json({
             success: true,
@@ -451,7 +473,7 @@ export const getElectionDetails = async (req, res) => {
                 }
             })
             .populate('officers', 'name email')
-            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt -password');
+            .select('-ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecPrivateKeyDerivationSalt -password');
 
         if (!election) {
             return res.status(404).json({

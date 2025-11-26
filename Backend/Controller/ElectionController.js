@@ -137,7 +137,7 @@ export const createElection = async (req, res) => {
             ecPrivateKey: encryptedPrivateKey.encryptedUserData,
             ecPrivateKeyIV: encryptedPrivateKey.iv,
             ecPrivateKeyAuthTag: encryptedPrivateKey.authTag,
-            ecprivateKeyDerivationSalt: salt.toString("hex"),
+            ecPrivateKeyDerivationSalt: salt.toString("hex"),
             pinCodes,
             users: formattedUsers,
             candidates: [],
@@ -254,7 +254,7 @@ export const createElection = async (req, res) => {
             .populate('officers', 'name email')
             .populate('users.user', 'voterId name email pincode')
             .populate('candidates.candidate', 'candidate_id name')
-            .select('-password -ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt');
+            .select('-password -ecPublicKey -ecPrivateKey -ecPublicKeyIV -ecPrivateKeyIV -ecPublicKeyAuthTag -ecPrivateKeyAuthTag -ecPrivateKeyDerivationSalt');
 
         return res.status(201).json({
             success: true,
@@ -288,7 +288,7 @@ export const getAllElections = async (req, res) => {
             .populate('officers', 'name email')
             .populate('users.user', 'voterId name email pincode')
             .populate('candidates.candidate', 'candidate_id name')
-            .select('-password -ecPublicKey -ecPrivateKey -ecPrivateKeyIV -ecPrivateKeyAuthTag -ecPrivateKeyAuthTag -ecprivateKeyDerivationSalt')
+            .select('-password -ecPublicKey -ecPrivateKey -ecPrivateKeyIV -ecPrivateKeyAuthTag -ecPrivateKeyAuthTag -ecPrivateKeyDerivationSalt')
             .sort({ createdAt: -1 });
 
         return res.status(200).json({
