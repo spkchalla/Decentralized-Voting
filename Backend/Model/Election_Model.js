@@ -64,7 +64,7 @@ const electionSchema = new Schema({
         type:String,
         required:true
     },
-    ecprivateKeyDerivationSalt:{
+    ecPrivateKeyDerivationSalt:{
         type:String,
         required:true
     },
