@@ -195,7 +195,7 @@ const Home = () => {
     const getTypeText = () => {
       switch (type) {
         case 'vote': return 'Vote Now';
-        case 'register': return 'Register Now';
+        case 'register': return 'Pending Registration';
         case 'finished': return 'Completed';
         case 'upcoming': return 'Upcoming';
         default: return 'Election';
@@ -204,7 +204,7 @@ const Home = () => {
     const getRegistrationStatusText = (status) => {
       switch (status) {
         case 'not_registered': return 'Not Registered';
-        case 'pending': return 'Pending Verification';
+        case 'pending': return 'Pending Registration';
         case 'verified': return 'Verified';
         case 'rejected': return 'Registration Rejected';
         case 'registered': return 'Registered';
@@ -269,7 +269,7 @@ const Home = () => {
               {registering[election._id]
                 ? 'Registering...'
                 : election.userStatus?.registrationStatus === 'pending'
-                  ? 'Pending Verification'
+                  ? 'Register Now'
                   : election.userStatus?.registrationStatus === 'registered'
                     ? 'Registered'
                     : 'Register Now'}

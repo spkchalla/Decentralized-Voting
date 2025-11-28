@@ -235,7 +235,7 @@ const Elections = () => {
     setIsActionLoading(true);
     try {
       const { data } = await api.put(
-        `/election/update/${selectedElection.eid}`,
+        `/election/update/${selectedElection._id}`,
         {
           ...formData,
           pinCodes: formData.pincodes.split(',').map((p) => p.trim()).filter((p) => p),
@@ -251,11 +251,12 @@ const Elections = () => {
     }
   };
 
-  const handleDeleteElection = async (eid) => {
+  const handleDeleteElection = async (id) => {
     if (!window.confirm('Delete this election?')) return;
     setIsActionLoading(true);
+
     try {
-      const { data } = await api.delete(`/election/${eid}`);
+      const { data } = await api.delete(`/election/${id}`);
       toast.success(data.message || 'Election deleted');
       fetchElections();
     } catch (err) {
@@ -264,6 +265,7 @@ const Elections = () => {
       setIsActionLoading(false);
     }
   };
+
 
   const handleViewResults = async (eid) => {
     try {
@@ -489,8 +491,8 @@ const Elections = () => {
       description: 'This is a test election created for testing purposes. Please vote for your preferred candidate.',
       startDateTime: startDate.toISOString().slice(0, 16),
       endDateTime: endDate.toISOString().slice(0, 16),
-      pincodes: '500001, 500002, 500003',
-      password: 'TestPass123'
+      pincodes: '507002, 509103, 505001',
+      password: '12345678'
     }));
     toast.info('Default values filled! Please select candidates.');
   };
@@ -599,11 +601,10 @@ const Elections = () => {
                 <button
                   onClick={() => setShowForm(true)}
                   disabled={isActionLoading}
-                  className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${
-                    isActionLoading
-                      ? 'bg-gray-500 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer'
-                  }`}
+                  className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${isActionLoading
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer'
+                    }`}
                 >
                   + Create Election
                 </button>
@@ -1252,10 +1253,10 @@ const Elections = () => {
                           <div className="group/btn relative flex items-center">
                             <button
                               onClick={() => handleEditElection(election)}
-                              disabled={election.status?.toLowerCase() !== 'not yet started' || isActionLoading}
-                              className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${election.status?.toLowerCase() !== 'not yet started'
-                                ? 'text-slate-600 cursor-not-allowed'
-                                : 'text-indigo-300 hover:bg-indigo-900/20'
+                              disabled={!["not yet started", "upcoming"].includes(election.status?.toLowerCase()) || isActionLoading}
+                              className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${!["not yet started", "upcoming"].includes(election.status?.toLowerCase())
+                                  ? 'text-slate-600 cursor-not-allowed'
+                                  : 'text-indigo-300 hover:bg-indigo-900/20'
                                 }`}
                               title="Edit"
                             >
@@ -1267,7 +1268,7 @@ const Elections = () => {
                           {/* Delete Button */}
                           <div className="group/btn relative flex items-center">
                             <button
-                              onClick={() => handleDeleteElection(election.eid)}
+                              onClick={() => handleDeleteElection(election._id)}
                               disabled={election.status?.toLowerCase() !== 'not yet started' || isActionLoading}
                               className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${election.status?.toLowerCase() !== 'not yet started'
                                 ? 'text-slate-600 cursor-not-allowed'
