@@ -57,7 +57,7 @@ class ElectionErrorBoundary extends React.Component {
           <p>Something went wrong: {this.state.errorMessage}</p>
           <button
             onClick={() => this.setState({ hasError: false, errorMessage: '' })}
-            className="mt-2 py-1 px-3 rounded bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer transition-transform duration-200 hover:scale-105 hover:shadow-lg hover:from-indigo-400 hover:to-indigo-800"
+            className="mt-2 py-1 px-3 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer transition-transform duration-200 hover:scale-105 hover:shadow-lg"
           >
             Retry
           </button>
@@ -69,14 +69,14 @@ class ElectionErrorBoundary extends React.Component {
 }
 
 // ---------------------------------------------------------------------------
-// Modal Components
+// Modal Components (styled to Admin theme)
 // ---------------------------------------------------------------------------
 const Modal = ({ children, onClose, size = "md" }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div
-      className={`bg-slate-900 rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden border border-slate-700 animate-scaleIn ${size === "lg" ? "max-w-4xl" :
-        size === "md" ? "max-w-2xl" :
-          "max-w-lg"
+      className={`bg-slate-900 p-8 rounded-lg shadow-lg w-full max-h-[90vh] overflow-hidden border border-slate-700 ${size === "lg" ? "sm:max-w-4xl" :
+        size === "md" ? "sm:max-w-2xl" :
+          "sm:max-w-lg"
         }`}
     >
       {children}
@@ -85,8 +85,8 @@ const Modal = ({ children, onClose, size = "md" }) => (
 );
 
 const ModalHeader = ({ children, onClose }) => (
-  <div className="flex justify-between items-center p-6 border-b border-slate-700">
-    <div className="text-xl font-bold text-white">{children}</div>
+  <div className="flex justify-between items-center mb-4">
+    <div className="text-2xl font-semibold text-white">{children}</div>
     <button
       onClick={onClose}
       className="text-slate-400 hover:text-white transition-colors cursor-pointer text-2xl"
@@ -97,13 +97,13 @@ const ModalHeader = ({ children, onClose }) => (
 );
 
 const ModalBody = ({ children, className = "" }) => (
-  <div className={`p-6 overflow-y-auto ${className}`}>
+  <div className={`pb-4 overflow-y-auto ${className}`}>
     {children}
   </div>
 );
 
 const ModalFooter = ({ children }) => (
-  <div className="flex justify-end gap-3 p-6 border-t border-slate-700">
+  <div className="flex justify-end gap-3 mt-4">
     {children}
   </div>
 );
@@ -235,7 +235,7 @@ const Elections = () => {
     setIsActionLoading(true);
     try {
       const { data } = await api.put(
-        `/election/update/${selectedElection.eid}`,
+        `/election/update/${selectedElection._id}`,
         {
           ...formData,
           pinCodes: formData.pincodes.split(',').map((p) => p.trim()).filter((p) => p),
@@ -251,11 +251,12 @@ const Elections = () => {
     }
   };
 
-  const handleDeleteElection = async (eid) => {
+  const handleDeleteElection = async (id) => {
     if (!window.confirm('Delete this election?')) return;
     setIsActionLoading(true);
+
     try {
-      const { data } = await api.delete(`/election/${eid}`);
+      const { data } = await api.delete(`/election/${id}`);
       toast.success(data.message || 'Election deleted');
       fetchElections();
     } catch (err) {
@@ -264,6 +265,7 @@ const Elections = () => {
       setIsActionLoading(false);
     }
   };
+
 
   const handleViewResults = async (eid) => {
     try {
@@ -489,8 +491,8 @@ const Elections = () => {
       description: 'This is a test election created for testing purposes. Please vote for your preferred candidate.',
       startDateTime: startDate.toISOString().slice(0, 16),
       endDateTime: endDate.toISOString().slice(0, 16),
-      pincodes: '500001, 500002, 500003',
-      password: 'TestPass123'
+      pincodes: '507002, 509103, 505001',
+      password: '12345678'
     }));
     toast.info('Default values filled! Please select candidates.');
   };
@@ -569,33 +571,44 @@ const Elections = () => {
   // -------------------------------------------------------------------------
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[url('/bg_img.png')] bg-cover bg-center">
+      <div className="min-h-screen px-6 sm:px-0 bg-slate-950">
         <Navbar />
-        <p className="text-white">Loading...</p>
+        <div className="flex items-center justify-center pt-28">
+          <p className="text-white">Loading...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <ElectionErrorBoundary>
-      <div className="flex flex-col min-h-screen bg-[url('/bg_img.png')] bg-cover bg-center">
+      <div className="min-h-screen px-6 sm:px-0 bg-slate-950">
         <Navbar />
-        <div className="flex flex-col items-center justify-start flex-grow pt-24 px-4 sm:px-6">
-          <div className="w-full max-w-7xl bg-slate-900/90 backdrop-blur-md p-6 rounded-xl shadow-2xl border border-slate-700">
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-              <h3 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                Elections Management
-              </h3>
-              <button
-                onClick={() => setShowForm(true)}
-                disabled={isActionLoading}
-                className={`py-2.5 px-6 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold shadow-lg transition-all duration-300 ${isActionLoading
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:scale-105 hover:shadow-indigo-500/50 hover:from-indigo-500 hover:to-purple-500'
-                  }`}
-              >
-                + Create New Election
-              </button>
+        <div className="flex items-center justify-center pt-28">
+          <div className="bg-slate-900 p-12 rounded-lg shadow-lg w-full sm:w-[1100px] text-indigo-300 text-base">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-4xl font-semibold text-white">Elections Management</h2>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search elections..."
+                    className="w-full sm:w-[240px] px-4 py-2.5 rounded-full bg-[#333A5C] text-white outline-none text-sm transition-all"
+                  />
+                </div>
+                <button
+                  onClick={() => setShowForm(true)}
+                  disabled={isActionLoading}
+                  className={`px-4 py-2 rounded-full font-medium text-base transition-transform duration-200 transform hover:scale-105 hover:shadow-lg ${isActionLoading
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-indigo-500 to-indigo-900 text-white cursor-pointer'
+                    }`}
+                >
+                  + Create Election
+                </button>
+              </div>
             </div>
 
             {/* Filter Tabs */}
@@ -625,7 +638,7 @@ const Elections = () => {
                         type="button"
                         onClick={handleFillDefault}
                         disabled={isActionLoading}
-                        className="ml-4 px-4 py-1.5 text-sm rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium shadow-md hover:from-cyan-500 hover:to-blue-500 transition-all duration-200 cursor-pointer"
+                        className="ml-4 px-4 py-1.5 text-sm rounded-full bg-gradient-to-r from-indigo-600 to-indigo-900 text-white font-medium shadow-md hover:from-indigo-500 hover:to-indigo-800 transition-all duration-200 cursor-pointer"
                       >
                         Fill Default
                       </button>
@@ -645,7 +658,7 @@ const Elections = () => {
                           name="eid"
                           value={formData.eid}
                           onChange={handleInputChange}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           required
                           disabled={!!selectedElection || isActionLoading}
                           placeholder="E.g., ELE-2023-001"
@@ -658,7 +671,7 @@ const Elections = () => {
                           name="title"
                           value={formData.title}
                           onChange={handleInputChange}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           required
                           disabled={isActionLoading}
                           placeholder="Election Title"
@@ -674,7 +687,7 @@ const Elections = () => {
                           name="password"
                           value={formData.password}
                           onChange={handleInputChange}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           required
                           disabled={isActionLoading}
                           placeholder="Secure password for election encryption"
@@ -689,7 +702,7 @@ const Elections = () => {
                         name="description"
                         value={formData.description}
                         onChange={handleInputChange}
-                        className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all min-h-[100px]"
+                        className="w-full p-3 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 transition-all min-h-[100px]"
                         disabled={isActionLoading}
                         placeholder="Describe the election..."
                       />
@@ -702,7 +715,7 @@ const Elections = () => {
                         name="pincodes"
                         value={formData.pincodes}
                         onChange={handleInputChange}
-                        className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                         required
                         disabled={isActionLoading}
                         placeholder="e.g. 500001, 500002"
@@ -718,7 +731,7 @@ const Elections = () => {
                           name="startDateTime"
                           value={formData.startDateTime}
                           onChange={handleInputChange}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           required
                           disabled={isActionLoading}
                         />
@@ -730,7 +743,7 @@ const Elections = () => {
                           name="endDateTime"
                           value={formData.endDateTime}
                           onChange={handleInputChange}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           required
                           disabled={isActionLoading}
                         />
@@ -746,11 +759,11 @@ const Elections = () => {
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           onFocus={() => setIsDropdownOpen(true)}
-                          className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                          className="w-full p-2.5 rounded-full bg-[#333A5C] text-white outline-none transition-all"
                           disabled={isActionLoading}
                         />
                         {isDropdownOpen && (
-                          <div className="absolute z-10 w-full max-h-60 overflow-y-auto bg-slate-800 rounded-lg mt-1 shadow-xl border border-slate-600">
+                          <div className="absolute z-10 w-full max-h-60 overflow-y-auto bg-[#333A5C] rounded-lg mt-2 shadow-lg border border-slate-700">
                             {filteredCandidates.length === 0 ? (
                               <p className="p-3 text-gray-400 text-center">No candidates found.</p>
                             ) : (
@@ -809,16 +822,16 @@ const Elections = () => {
                     type="button"
                     onClick={handleCloseForm}
                     disabled={isActionLoading}
-                    className="px-5 py-2.5 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="px-5 py-2.5 rounded-full font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={selectedElection ? handleUpdateElection : handleCreateElection}
                     disabled={isActionLoading}
-                    className={`px-6 py-2.5 rounded-lg font-medium text-white shadow-lg transition-all duration-300 cursor-pointer ${isActionLoading
+                    className={`px-6 py-2.5 rounded-full font-medium text-white shadow-lg transition-all duration-300 cursor-pointer ${isActionLoading
                       ? 'bg-slate-600 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 hover:shadow-indigo-500/30'
+                      : 'bg-gradient-to-r from-indigo-500 to-indigo-900 hover:from-indigo-400 hover:to-indigo-800'
                       }`}
                   >
                     {isActionLoading
@@ -853,17 +866,17 @@ const Elections = () => {
                       </span>
                     </div>
 
-                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <div className="bg-[#333A5C] p-4 rounded-xl border border-slate-700">
                       <h4 className="text-lg font-semibold text-indigo-300 mb-2">Description</h4>
                       <p className="text-slate-300 leading-relaxed">{selectedElection.description || 'No description provided.'}</p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                      <div className="bg-[#333A5C] p-4 rounded-xl border border-slate-700">
                         <h4 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider mb-1">Start Time</h4>
                         <p className="text-white font-mono text-lg">{new Date(selectedElection.startDateTime).toLocaleString()}</p>
                       </div>
-                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                      <div className="bg-[#333A5C] p-4 rounded-xl border border-slate-700">
                         <h4 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider mb-1">End Time</h4>
                         <p className="text-white font-mono text-lg">{new Date(selectedElection.endDateTime).toLocaleString()}</p>
                       </div>
@@ -876,7 +889,7 @@ const Elections = () => {
                           selectedElection.candidates.map((c, idx) => {
                             const cand = c.candidate || c; // Handle populated or raw ID
                             return (
-                              <div key={idx} className="bg-slate-800 p-3 rounded-lg border border-slate-700 flex items-center gap-3">
+                              <div key={idx} className="bg-[#333A5C] p-3 rounded-lg border border-slate-700 flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">
                                   {cand.name ? cand.name.charAt(0) : '?'}
                                 </div>
@@ -911,13 +924,13 @@ const Elections = () => {
                 <ModalFooter>
                   <button
                     onClick={() => setShowConfirmPopup(false)}
-                    className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors cursor-pointer"
+                    className="px-4 py-2 rounded-full text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
                   >
                     Keep Editing
                   </button>
                   <button
                     onClick={confirmCloseForm}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-lg transition-colors cursor-pointer"
+                    className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition-colors cursor-pointer"
                   >
                     Discard Changes
                   </button>
@@ -934,7 +947,7 @@ const Elections = () => {
                 <ModalBody className="max-h-[70vh]">
                   {/* Results Summary */}
                   {validationData.winner && (
-                    <div className="mb-6 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-xl border border-indigo-500/30 p-5">
+                    <div className="mb-6 bg-[#333A5C] rounded-xl border border-indigo-500/10 p-5">
                       <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <span className="text-2xl">🏆</span> Election Results
                       </h3>
@@ -994,7 +1007,7 @@ const Elections = () => {
 
                   {/* Statistics Summary */}
                   <div className="grid grid-cols-4 gap-4 mb-6">
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 text-center">
+                    <div className="bg-[#333A5C] p-4 rounded-lg border border-slate-700 text-center">
                       <div className="text-2xl font-bold text-white">{validationData.statistics.totalVotesProcessed}</div>
                       <div className="text-sm text-slate-400">Total Votes</div>
                     </div>
@@ -1016,7 +1029,7 @@ const Elections = () => {
                   <div className="space-y-3">
                     <h3 className="text-lg font-semibold text-white mb-3">Vote Breakdown:</h3>
                     {validationData.voteDetails.map((vote, index) => (
-                      <details key={index} className="bg-slate-800/50 rounded-lg border border-slate-700">
+                      <details key={index} className="bg-[#333A5C] rounded-lg border border-slate-700">
                         <summary className="cursor-pointer p-4 hover:bg-slate-700/30 transition-colors">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -1174,7 +1187,7 @@ const Elections = () => {
                 <ModalFooter>
                   <button
                     onClick={() => setShowValidationModal(false)}
-                    className="px-6 py-2.5 rounded-lg font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200 cursor-pointer"
+                    className="px-6 py-2.5 rounded-full font-medium text-white bg-gradient-to-r from-indigo-500 to-indigo-900 hover:from-indigo-400 hover:to-indigo-800 transition-all duration-200 cursor-pointer"
                   >
                     Close
                   </button>
@@ -1182,10 +1195,10 @@ const Elections = () => {
               </Modal>
             )}
 
-            {/* Elections Grid */}
+            {/* Elections Grid (kept, but visually matched to Admin theme) */}
             <div className="mt-6">
               {filteredElectionsList.length === 0 ? (
-                <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700 border-dashed">
+                <div className="text-center py-12 bg-[#333A5C] rounded-xl border border-slate-700 border-dashed">
                   <p className="text-slate-400 text-lg">No elections found for this category.</p>
                   <button
                     onClick={() => setFilterStatus('All')}
@@ -1199,7 +1212,7 @@ const Elections = () => {
                   {filteredElectionsList.map((election) => (
                     <div
                       key={election.eid}
-                      className="bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700 hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col group"
+                      className="bg-[#333A5C] rounded-xl overflow-hidden shadow-lg border border-slate-700 hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col group"
                     >
                       <div className="p-5 flex-grow">
                         <div className="flex justify-between items-start mb-3">
@@ -1213,15 +1226,15 @@ const Elections = () => {
                         </div>
 
                         <h4 className="text-xl font-bold text-white mb-2 line-clamp-1" title={election.title}>{election.title}</h4>
-                        <p className="text-slate-400 text-sm mb-4 line-clamp-2 min-h-[2.5em]">{election.description || 'No description available.'}</p>
+                        <p className="text-slate-300 text-sm mb-4 line-clamp-2 min-h-[2.5em]">{election.description || 'No description available.'}</p>
 
                         <div className="space-y-2 text-sm text-slate-300">
                           <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                             <span>Start: {new Date(election.startDateTime).toLocaleString()}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             <span>End: {new Date(election.endDateTime).toLocaleString()}</span>
                           </div>
                         </div>
@@ -1240,31 +1253,31 @@ const Elections = () => {
                           <div className="group/btn relative flex items-center">
                             <button
                               onClick={() => handleEditElection(election)}
-                              disabled={election.status?.toLowerCase() !== 'not yet started' || isActionLoading}
-                              className={`p-2 rounded-lg transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${election.status?.toLowerCase() !== 'not yet started'
-                                ? 'text-slate-600 cursor-not-allowed'
-                                : 'text-blue-400 hover:bg-blue-900/30 hover:w-auto'
+                              disabled={!["not yet started", "upcoming"].includes(election.status?.toLowerCase()) || isActionLoading}
+                              className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${!["not yet started", "upcoming"].includes(election.status?.toLowerCase())
+                                  ? 'text-slate-600 cursor-not-allowed'
+                                  : 'text-indigo-300 hover:bg-indigo-900/20'
                                 }`}
                               title="Edit"
                             >
                               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                              <span className="max-w-0 opacity-0 group-hover/btn:max-w-xs group-hover/btn:opacity-100 transition-all duration-300 whitespace-nowrap">Edit</span>
+                              <span className="sr-only">Edit</span>
                             </button>
                           </div>
 
                           {/* Delete Button */}
                           <div className="group/btn relative flex items-center">
                             <button
-                              onClick={() => handleDeleteElection(election.eid)}
+                              onClick={() => handleDeleteElection(election._id)}
                               disabled={election.status?.toLowerCase() !== 'not yet started' || isActionLoading}
-                              className={`p-2 rounded-lg transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${election.status?.toLowerCase() !== 'not yet started'
+                              className={`p-2 rounded-full transition-all duration-300 flex items-center gap-2 overflow-hidden cursor-pointer ${election.status?.toLowerCase() !== 'not yet started'
                                 ? 'text-slate-600 cursor-not-allowed'
-                                : 'text-red-400 hover:bg-red-900/30 hover:w-auto'
+                                : 'text-red-400 hover:bg-red-900/20'
                                 }`}
                               title="Delete"
                             >
                               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                              <span className="max-w-0 opacity-0 group-hover/btn:max-w-xs group-hover/btn:opacity-100 transition-all duration-300 whitespace-nowrap">Delete</span>
+                              <span className="sr-only">Delete</span>
                             </button>
                           </div>
 
@@ -1273,11 +1286,11 @@ const Elections = () => {
                             <button
                               onClick={() => handleViewResults(election.eid)}
                               disabled={isActionLoading}
-                              className="p-2 rounded-lg transition-colors duration-200 flex items-center gap-2 text-green-400 hover:bg-green-900/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="p-2 rounded-full transition-colors duration-200 flex items-center gap-2 text-green-400 hover:bg-green-900/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="View Results"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                              <span className="ml-1">Results</span>
+                              <span className="sr-only">Results</span>
                             </button>
                           </div>
 
@@ -1286,11 +1299,11 @@ const Elections = () => {
                             <button
                               onClick={() => handleViewValidationDetails(election.eid)}
                               disabled={isActionLoading}
-                              className="p-2 rounded-lg transition-colors duration-200 flex items-center gap-2 text-purple-400 hover:bg-purple-900/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="p-2 rounded-full transition-colors duration-200 flex items-center gap-2 text-purple-400 hover:bg-purple-900/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="View Validation Details"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                              <span className="ml-1">Validation</span>
+                              <span className="sr-only">Validation</span>
                             </button>
                           </div>
 
@@ -1299,11 +1312,11 @@ const Elections = () => {
                             <button
                               onClick={() => handleUpdateStatus(election.eid)}
                               disabled={isActionLoading}
-                              className="p-2 rounded-lg text-yellow-400 hover:bg-yellow-900/30 transition-colors duration-200 flex items-center gap-2 cursor-pointer"
+                              className="p-2 rounded-full text-yellow-400 hover:bg-yellow-900/20 transition-colors duration-200 flex items-center gap-2 cursor-pointer"
                               title="Update Status"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                              <span className="ml-1">Status</span>
+                              <span className="sr-only">Status</span>
                             </button>
                           </div>
 
@@ -1312,14 +1325,14 @@ const Elections = () => {
                             <button
                               onClick={() => handleForceStart(election.eid)}
                               disabled={election.status?.toLowerCase() !== 'not yet started' || isActionLoading}
-                              className={`px-4 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2 ${election.status?.toLowerCase() !== 'not yet started'
+                              className={`px-4 py-2 rounded-full font-semibold transition-colors duration-200 flex items-center gap-2 ${election.status?.toLowerCase() !== 'not yet started'
                                 ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                                 : 'bg-green-600 text-white hover:bg-green-700 cursor-pointer shadow-lg'
                                 }`}
                               title="Force Start Election"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                              <span>START NOW</span>
+                              <span className="text-sm">START NOW</span>
                             </button>
                           </div>
 
@@ -1328,14 +1341,14 @@ const Elections = () => {
                             <button
                               onClick={() => handleForceFinish(election.eid)}
                               disabled={election.status?.toLowerCase() === 'finished' || isActionLoading}
-                              className={`px-4 py-2 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2 ${election.status?.toLowerCase() === 'finished'
+                              className={`px-4 py-2 rounded-full font-semibold transition-colors duration-200 flex items-center gap-2 ${election.status?.toLowerCase() === 'finished'
                                 ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                                 : 'bg-red-600 text-white hover:bg-red-700 cursor-pointer shadow-lg'
                                 }`}
                               title="Force Finish Election"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
-                              <span>END ELECTION</span>
+                              <span className="text-sm">END ELECTION</span>
                             </button>
                           </div>
                         </div>
