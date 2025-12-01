@@ -150,7 +150,7 @@ Special thanks to the team who worked on this project:
 *   **Likhith** [@Likhith025](https://github.com/Likhith025)
 *   **Kunal** [@kunalchakilam](https://github.com/kunalchakilam)
 *   **Dachepally Sathwik** [@Sathwik4804](https://github.com/Sathwik4804)
-*   **Gopishetty Sathwik** [@Sathwik0806](https://github.com/Sathwik0806)
+*   **Gopishetty Sathvik** [@Sathwik0806](https://github.com/Sathwik0806)
 *   **Lithin** [@lithinkasaboina](https://github.com/lithinkasaboina)
 
 ## 📄 License
